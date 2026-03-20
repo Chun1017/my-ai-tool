@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>珠寶 AI 攝影師 - 最終修復版</title>
+    <title>珠寶 AI 攝影師 - 重生版</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; text-align: center; }
+        body { font-family: system-ui; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; text-align: center; }
         .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: left; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 25px; }
         .box { border: 2px dashed #e2e8f0; padding: 20px; border-radius: 15px; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; }
@@ -14,118 +14,139 @@
         button { background: #2563eb; color: white; font-weight: bold; cursor: pointer; border: none; }
         button:disabled { background: #cbd5e1; cursor: not-allowed; }
         #status { color: #2563eb; font-weight: bold; margin: 20px 0; }
-        #log { background: #0f172a; color: #38bdf8; padding: 15px; font-size: 11px; border-radius: 10px; margin-top: 20px; white-space: pre-wrap; display: none; text-align: left; max-height: 200px; overflow-y: auto; }
+        #log { background: #0f172a; color: #38bdf8; padding: 15px; font-size: 11px; border-radius: 10px; margin-top: 20px; white-space: pre-wrap; display: none; text-align: left; overflow-y: auto; max-height: 200px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 style="text-align:center;">💎 珠寶 AI 攝影師 (ID 修正版)</h2>
+    <h2 style="text-align:center;">💎 珠寶 AI 攝影師</h2>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
-    <input type="text" id="sku" placeholder="輸入 SKU">
-    <input type="file" id="fileInput">
-    <button id="mainBtn" onclick="start()">🚀 立即生圖 (自動匹配正確 ID)</button>
-    <div id="status">準備就緒</div>
+    <input type="text" id="sku" placeholder="輸入 SKU (例如: HEART-BLUE-01)">
+    <input type="file" id="fileInput" accept="image/*">
+    <button id="mainBtn" onclick="runProcess()">🚀 立即生圖 (Google Imagen 引擎)</button>
+    <div id="status">準備就緒 (請確保已連接 VPN)</div>
     <div class="grid">
         <div class="box"><b>1. 純白背景</b><img id="r1"><button id="d1" style="display:none" onclick="dl(1)">💾 下載</button></div>
         <div class="box"><b>2. 淺灰背景</b><img id="r2"><button id="d2" style="display:none" onclick="dl(2)">💾 下載</button></div>
     </div>
-    <pre id="log"></pre>
+    <pre id="debug"></pre>
 </div>
 
 <script>
-async function start() {
+// A. 壓縮圖片輔助函數 (雖然 Llama 3.2 Vision 唔使壓縮，但生圖可能使)
+async function compressImage(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_SIZE = 800;
+                let w = img.width, h = img.height;
+                if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } }
+                else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// B. 呼叫 API 函數 (加入更詳細錯誤報錯)
+async function callOpenRouter(key, model, payload) {
+    try {
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: { 
+                "Authorization": `Bearer ${key}`, 
+                "Content-Type": "application/json",
+                "HTTP-Referer": window.location.origin
+            },
+            body: JSON.stringify({ model: model, messages: payload })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(`${model} 報錯: ${data.error.message}`);
+        if (!data.choices) throw new Error(`${model} 無回傳內容`);
+        return data.choices[0].message.content;
+    } catch (e) {
+        throw new Error(`${model} 連線失敗: ${e.message}`);
+    }
+}
+
+// C. 主流程
+async function runProcess() {
     const key = document.getElementById('key').value;
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
-    const log = document.getElementById('log');
-    if(!key || !file) return alert("資料未齊");
+    const mainBtn = document.getElementById('mainBtn');
+    const debug = document.getElementById('debug');
 
-    document.getElementById('mainBtn').disabled = true;
-    log.style.display = "block";
-    log.innerText = "開始任務...";
-    status.innerText = "⏳ 正在辨識材質...";
+    if (!key || !file) return alert("請填寫 Key 並選圖");
+
+    mainBtn.disabled = true;
+    debug.style.display = "none";
+    status.innerText = "⏳ 步驟 1: 正在壓縮圖片 ( VPN 行得通)...";
 
     try {
-        const b64 = await new Promise(res => {
-            const r = new FileReader();
-            r.onload = e => res(e.target.result);
-            r.readAsDataURL(file);
-        });
+        const resizedUrl = await compressImage(file);
+        
+        status.innerText = "⏳ 步驟 2: 正在辨識材質 (Llama)...";
+        const materialRaw = await callOpenRouter(key, "meta-llama/llama-3.2-11b-vision-instruct", [
+            { role: "user", content: [
+                { type: "text", text: "Identify the material. Answer ONE word: Pearl, Moissanite, or Jade." },
+                { type: "image_url", image_url: { url: resizedUrl } }
+            ]}
+        ]);
+        const material = materialRaw.trim().replace(/[^a-zA-Z]/g, '');
 
-        // 1. 辨識材質
-        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: "meta-llama/llama-3.2-11b-vision-instruct",
-                messages: [{ role: "user", content: [{ type: "text", text: "What material? One word: Moissanite, Pearl, Jade." }, { type: "image_url", image_url: { url: b64 } }] }]
-            })
-        });
-        const data = await res.json();
-        const mat = data.choices[0].message.content.trim().split(/\s+/)[0].replace(/[^a-zA-Z]/g, '');
-        status.innerText = `✨ 材質: ${mat}。正在嘗試生圖...`;
+        status.innerText = `✨ 辨識成功：${material}。步驟 3: 生圖 (Google Imagen)...`;
 
-        // 2. 生圖函數：嘗試不同 ID 格式
-        const gen = async (bg, id, btn) => {
-            // 優先嘗試橫杠格式，再嘗試斜杠格式，最後嘗試 Google
-            const possibleModels = [
-                "black-forest-labs/flux-schnell", 
-                "black-forest-labs/flux/schnell",
-                "google/gemini-2.0-flash-001"
-            ];
-
-            const prompt = `Professional jewelry photography, ${mat} piece, silver, centered on ${bg} background, studio lighting. Return ONLY an image URL.`;
-
-            for (let modelId of possibleModels) {
-                try {
-                    log.innerText += `\n測試 ID: ${modelId}`;
-                    const gRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                        method: "POST",
-                        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-                        body: JSON.stringify({ model: modelId, messages: [{ role: "user", content: prompt }] })
-                    });
-                    const gData = await gRes.json();
-                    
-                    if(gData.error) {
-                        log.innerText += ` -> 失敗: ${gData.error.message}`;
-                        continue; 
-                    }
-
-                    const content = gData.choices[0].message.content;
-                    const urlMatch = content.match(/https?:\/\/\S+/g);
-                    if (urlMatch) {
-                        const url = urlMatch[0].replace(/[")].*$/, "");
-                        document.getElementById(id).src = url;
-                        document.getElementById(id).style.display = "block";
-                        document.getElementById(btn).style.display = "block";
-                        log.innerText += `\n✅ 成功！使用引擎: ${modelId}`;
-                        return;
-                    }
-                } catch (e) {
-                    continue;
-                }
-            }
-            throw new Error("所有嘗試過的 Model ID 均無效，請檢查 API Key 餘額。");
+        const genImg = async (bg, imgId, btnId) => {
+            const prompt = `Extreme high-quality commercial photo of ${material} jewelry piece, centered on ${bg} studio background, cinematic soft lighting, hyper-realistic, 8k resolution. ReturnONLY an image URL.`;
+            
+            // 修正：呢度用 Google Imagen路徑，對地區最鬆且 ID 最穩
+            const content = await callOpenRouter(key, "google/imagen-3-fast", [
+                { role: "user", content: prompt }
+            ]);
+            
+            const urlMatch = content.match(/https?:\/\/\S+/g);
+            if (!urlMatch) throw new Error("Google Imagen 生成網址失敗，或回傳格式不正確");
+            
+            const url = urlMatch[0].replace(/[")].*$/, "");
+            document.getElementById(imgId).src = url;
+            document.getElementById(imgId).style.display = "block";
+            document.getElementById(btnId).style.display = "inline-block";
         };
 
-        await Promise.all([ gen("pure white", "r1", "d1"), gen("soft grey", "r2", "d2") ]);
-        status.innerText = "🎉 生成完畢！";
+        // 並行生成兩張圖，效率最高
+        await Promise.all([
+            genImg("pure white (#FFFFFF)", "r1", "d1"),
+            genImg("aesthetic soft light grey (#F2F2F2)", "r2", "d2")
+        ]);
+
+        status.innerText = "🎉 生成完畢！可以下載圖片了。";
+
     } catch (e) {
-        status.innerText = "❌ 失敗";
-        log.innerText += "\n錯誤詳情: " + e.message;
+        status.innerText = "❌ 發生錯誤";
+        debug.innerText = e.message;
+        debug.style.display = "block";
     } finally {
-        document.getElementById('mainBtn').disabled = false;
+        mainBtn.disabled = false;
     }
 }
 
 function dl(i) {
-    const s = document.getElementById('sku').value || "item";
+    const sku = document.getElementById('sku').value || "item";
     const a = document.createElement('a');
     a.href = document.getElementById(`r${i}`).src;
-    a.download = `${s}-${i}.jpg`;
+    a.download = `${sku}-${i}.jpg`;
     a.click();
 }
 </script>
+
 </body>
 </html>
