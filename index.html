@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>珠寶 AI 攝影師 - 最終穩定版</title>
+    <title>珠寶 AI 攝影師 - 多重保險版</title>
     <style>
         body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; text-align: center; }
         .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: left; }
@@ -14,17 +14,17 @@
         button { background: #2563eb; color: white; font-weight: bold; cursor: pointer; border: none; }
         button:disabled { background: #cbd5e1; cursor: not-allowed; }
         #status { color: #2563eb; font-weight: bold; margin: 20px 0; text-align: center; }
-        #debug { background: #0f172a; color: #38bdf8; padding: 15px; font-size: 12px; display: none; text-align: left; overflow: auto; max-height: 200px; border-radius: 10px; margin-top: 20px; white-space: pre-wrap; }
+        #debug { background: #0f172a; color: #38bdf8; padding: 15px; font-size: 12px; display: none; text-align: left; overflow: auto; max-height: 200px; border-radius: 10px; margin-top: 20px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 style="text-align:center;">💎 珠寶 AI 攝影師 (穩定版)</h2>
+    <h2 style="text-align:center;">💎 珠寶 AI 攝影師 (自動修復版)</h2>
     <input type="password" id="apiKey" placeholder="貼上 OpenRouter API Key">
     <input type="text" id="sku" placeholder="輸入 SKU">
     <input type="file" id="fileInput" accept="image/*">
-    <button id="mainBtn" onclick="run()">🚀 開始生成</button>
+    <button id="mainBtn" onclick="run()">🚀 開始生成 (自動匹配模型)</button>
     <div id="status">準備就緒</div>
     <div class="grid">
         <div class="box"><b>1. 純白背景</b><img id="r1"><button id="d1" style="display:none" onclick="dl(1)">💾 下載</button></div>
@@ -57,7 +57,7 @@ async function fetchAI(key, model, msgs) {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: model, messages: msgs })
+        body: JSON.stringify({ model: model.trim(), messages: msgs })
     });
     const data = await res.json();
     if(data.error) throw new Error(data.error.message);
@@ -69,37 +69,55 @@ async function run() {
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const debug = document.getElementById('debug');
-    if(!key || !file) return alert("請填寫 Key 並選圖");
+    if(!key || !file) return alert("填寫資料");
 
     document.getElementById('mainBtn').disabled = true;
     debug.style.display = "none";
-    status.innerText = "⏳ 正在分析中...";
+    status.innerText = "⏳ 正在辨識材質...";
 
     try {
         const img = await compress(file);
-        
-        // 1. 使用穩定度最高的 Llama 3.2 Vision (辨識)
         const matRaw = await fetchAI(key, "meta-llama/llama-3.2-11b-vision-instruct", [
-            { role: "user", content: [{ type: "text", text: "Material? Pearl/Moissanite/Crystal/Jade. One word." }, { type: "image_url", image_url: { url: img } }] }
+            { role: "user", content: [{ type: "text", text: "Material? One word." }, { type: "image_url", image_url: { url: img } }] }
         ]);
-        const m = matRaw.trim().split(/\s+/)[0].replace(/[^a-zA-Z]/g, '');
-        status.innerText = `✨ 材質: ${m}。正在生圖...`;
+        const m = matRaw.trim().replace(/[^a-zA-Z]/g, '');
+        status.innerText = `✨ 材質: ${m}。正在生成展示圖 (嘗試不同引擎)...`;
 
-        // 2. 生圖：換成 OpenRouter 上最保險的 ID 路徑
         const gen = async (bg, id, btn) => {
-            const p = `Jewelry photography, ${m} piece, centered on ${bg} background, studio light.`;
-            // 注意：這裡是官方目前最正確的 schnell 呼叫方式
-            const r = await fetchAI(key, "black-forest-labs/flux-schnell", [{ role: "user", content: p }]);
-            const u = r.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
-            document.getElementById(id).src = u;
-            document.getElementById(id).style.display = "block";
-            document.getElementById(btn).style.display = "inline-block";
+            const p = `Professional jewelry photography, ${m}, ${bg} background, studio light.`;
+            
+            // 【多重保險】嘗試多個可能的 Model ID
+            const models = [
+                "black-forest-labs/flux-schnell",
+                "google/gemini-2.0-flash-001",
+                "anthropic/claude-3.5-sonnet"
+            ];
+
+            let lastError = "";
+            for (const modelId of models) {
+                try {
+                    status.innerText = `⏳ 嘗試引擎: ${modelId}...`;
+                    const r = await fetchAI(key, modelId, [{ role: "user", content: p }]);
+                    const uMatch = r.match(/https?:\/\/\S+/g);
+                    if (uMatch) {
+                        const url = uMatch[0].replace(/[")].*$/, "");
+                        document.getElementById(id).src = url;
+                        document.getElementById(id).style.display = "block";
+                        document.getElementById(btn).style.display = "inline-block";
+                        return; // 成功就跳出
+                    }
+                } catch (e) {
+                    lastError = e.message;
+                    continue; // 失敗就試下一個
+                }
+            }
+            throw new Error("所有生圖引擎均不可用: " + lastError);
         };
 
         await Promise.all([ gen("pure white", "r1", "d1"), gen("soft grey", "r2", "d2") ]);
         status.innerText = "🎉 生成完畢！";
     } catch (e) {
-        status.innerText = "❌ 發生錯誤";
+        status.innerText = "❌ 失敗";
         debug.innerText = e.message;
         debug.style.display = "block";
     } finally {
