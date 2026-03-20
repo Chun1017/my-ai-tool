@@ -22,9 +22,9 @@
 <div class="card">
     <h2 style="text-align:center;">💎 珠寶 AI 攝影師</h2>
     <input type="password" id="apiKey" placeholder="貼上 OpenRouter API Key">
-    <input type="text" id="sku" placeholder="輸入 SKU (下載檔名使用)">
+    <input type="text" id="sku" placeholder="輸入 SKU">
     <input type="file" id="fileInput" accept="image/*">
-    <button id="mainBtn" onclick="runProcess()">🚀 開始生成</button>
+    <button id="mainBtn" onclick="run()">🚀 一鍵生成展示圖</button>
     <div id="status">準備就緒</div>
     <div class="grid">
         <div class="box"><b>1. 純白背景</b><img id="r1"><button id="d1" style="display:none" onclick="dl(1)">💾 下載</button></div>
@@ -53,7 +53,7 @@ async function compress(file) {
     });
 }
 
-async function askAI(key, model, msgs) {
+async function fetchAI(key, model, msgs) {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
@@ -64,40 +64,40 @@ async function askAI(key, model, msgs) {
     return data.choices[0].message.content;
 }
 
-async function runProcess() {
+async function run() {
     const key = document.getElementById('apiKey').value;
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const debug = document.getElementById('debug');
-    if(!key || !file) return alert("請填寫 Key 並選擇圖片");
+    if(!key || !file) return alert("請填寫 Key 並選圖");
 
     document.getElementById('mainBtn').disabled = true;
     debug.style.display = "none";
     status.innerText = "⏳ 正在辨識材質...";
 
     try {
-        const img64 = await compress(file);
-        // 材質辨識
-        const materialRaw = await askAI(key, "meta-llama/llama-3.2-11b-vision-instruct", [
-            { role: "user", content: [{ type: "text", text: "One word: Pearl, Moissanite, Crystal, or Jade?" }, { type: "image_url", image_url: { url: img64 } }] }
+        const img = await compress(file);
+        // 材質辨識 (正確 ID: meta-llama/llama-3.2-11b-vision-instruct)
+        const matRaw = await fetchAI(key, "meta-llama/llama-3.2-11b-vision-instruct", [
+            { role: "user", content: [{ type: "text", text: "Jewelry material: Pearl, Moissanite, Crystal, or Jade? One word." }, { type: "image_url", image_url: { url: img } }] }
         ]);
-        const mat = materialRaw.trim().replace(/[^a-zA-Z]/g, '');
-        status.innerText = `✨ 材質: ${mat}。正在生成展示圖...`;
+        const m = matRaw.trim().replace(/[^a-zA-Z]/g, '');
+        status.innerText = `✨ 材質: ${m}。正在生成展示圖 (Flux)...`;
 
         const gen = async (bg, id, btn) => {
-            const prompt = `Jewelry photography, ${mat} pendant, ${bg} background, studio lighting, high resolution.`;
-            // 修正後的 Model ID
-            const result = await askAI(key, "black-forest-labs/flux-schnell", [{ role: "user", content: prompt }]);
-            const url = result.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
-            document.getElementById(id).src = url;
+            const p = `High-end jewelry photography, ${m} pendant, ${bg} background, studio lighting, sharp focus.`;
+            // 正確 ID 是 black-forest-labs/flux/schnell (斜杠)
+            const r = await fetchAI(key, "black-forest-labs/flux/schnell", [{ role: "user", content: p }]);
+            const u = r.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
+            document.getElementById(id).src = u;
             document.getElementById(id).style.display = "block";
             document.getElementById(btn).style.display = "inline-block";
         };
 
-        await Promise.all([ gen("pure white", "r1", "d1"), gen("light grey", "r2", "d2") ]);
+        await Promise.all([ gen("pure white", "r1", "d1"), gen("soft grey", "r2", "d2") ]);
         status.innerText = "🎉 生成完畢！";
     } catch (e) {
-        status.innerText = "❌ 發生錯誤";
+        status.innerText = "❌ 錯誤";
         debug.innerText = e.message;
         debug.style.display = "block";
     } finally {
