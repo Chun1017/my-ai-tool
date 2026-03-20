@@ -55,37 +55,42 @@ async function processAll() {
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const mainBtn = document.getElementById('mainBtn');
-    const debugBox = document.getElementById('debug');
 
     if (!key || !sku || !file) return alert("請填寫所有資料");
 
     mainBtn.disabled = true;
-    debugBox.style.display = "none";
-    status.innerText = "⏳ 正在辨識材質 (使用 Claude 3.5)...";
+    status.innerText = "⏳ 正在啟動無限制辨識引擎 (Qwen)...";
 
     try {
         const resizedUrl = await resizeImage(file);
         
-        // 1. 識別材質 - 換成 Anthropic 避開地區限制
-        const material = await callAI(key, "anthropic/claude-3.5-sonnet", [
+        // 1. 識別材質 - 換成 Qwen-2-VL (最強國產視覺模型，無地區限制)
+        const material = await callAI(key, "qwen/qwen-2-vl-72b-instruct", [
             { role: "user", content: [
-                { type: "text", text: "Identify jewelry material: Pearl, Moissanite, Crystal, or Jade. Answer ONE word." },
+                { type: "text", text: "What is this jewelry made of? Answer only one word: Pearl, Moissanite, Crystal, or Jade." },
                 { type: "image_url", image_url: { url: resizedUrl } }
             ]}
         ]);
         
         status.innerText = `✨ 辨識成功：${material.trim()}。正在生圖 (Flux)...`;
 
-        // 2. 生成圖片 - 換成 Flux (最強生圖模型之一，無限制)
+        // 2. 生成圖片 
         const generateImg = async (bgDesc, imgId, btnId) => {
-            // Flux 需要比較純粹的文字 Prompt
-            const prompt = `Professional high-end jewelry photography of the ${material} jewelry from the uploaded image. Background: ${bgDesc}. Commercial lighting, 1024x1024, hyper-realistic, sharp focus on gemstone details.`;
+            const prompt = `Extreme high-quality commercial photo of ${material} jewelry, ${bgDesc} studio background, cinematic lighting, 8k resolution, photorealistic.`;
 
-            const content = await callAI(key, "black-forest-labs/flux-1-schnell", [
-                { role: "user", content: prompt }
-            ]);
-
+            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    "model": "black-forest-labs/flux-1-schnell", 
+                    "messages": [{ "role": "user", "content": prompt }]
+                })
+            });
+            
+            const data = await res.json();
+            const content = data.choices[0].message.content;
             const urlMatch = content.match(/https?:\/\/\S+/g);
+            
             if (urlMatch) {
                 const cleanUrl = urlMatch[0].replace(/[")].*$/, "");
                 const el = document.getElementById(imgId);
@@ -95,17 +100,15 @@ async function processAll() {
             }
         };
 
-        // 一次過生兩張圖
         await Promise.all([
-            generateImg("pure seamless white (#FFFFFF)", "res1", "dl1"),
-            generateImg("minimalist aesthetic light grey", "res2", "dl2")
+            generateImg("pure white", "res1", "dl1"),
+            generateImg("light grey", "res2", "dl2")
         ]);
 
         status.innerText = "🎉 生成完畢！";
     } catch (e) {
-        status.innerText = "❌ 報錯，請看下方數據";
-        debugBox.innerText = "出錯位置/原因: " + e.message;
-        debugBox.style.display = "block";
+        status.innerText = "❌ 報錯: " + e.message;
+        console.error(e);
     } finally {
         mainBtn.disabled = false;
     }
