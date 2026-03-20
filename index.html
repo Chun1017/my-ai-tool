@@ -49,72 +49,37 @@
 </div>
 
 <script>
-async function resizeImage(file) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; 
-                const scale = MAX_WIDTH / img.width;
-                canvas.width = MAX_WIDTH;
-                canvas.height = img.height * scale;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', 0.8));
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-}
-
-async function callAI(key, model, messages) {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: { 
-            "Authorization": `Bearer ${key}`, 
-            "Content-Type": "application/json",
-            "HTTP-Referer": window.location.href 
-        },
-        body: JSON.stringify({ "model": model, "messages": messages })
-    });
-    const data = await res.json();
-    if (!data.choices) throw new Error(data.error?.message || JSON.stringify(data));
-    return data.choices[0].message.content;
-}
-
 async function processAll() {
     const key = document.getElementById('apiKey').value;
     const sku = document.getElementById('sku').value;
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const mainBtn = document.getElementById('mainBtn');
+    const debugBox = document.getElementById('debug');
 
     if (!key || !sku || !file) return alert("請填寫所有資料");
 
     mainBtn.disabled = true;
-    status.innerText = "⏳ 正在辨識材質 (Claude 3.5)...";
+    debugBox.style.display = "none";
+    status.innerText = "⏳ 正在辨識材質 (使用 Claude 3.5)...";
 
     try {
         const resizedUrl = await resizeImage(file);
-        const base64Image = resizedUrl.split(',')[1];
         
-        // 1. 識別材質 (改用 Claude 3.5 Sonnet，避開 Google 地區限制)
+        // 1. 識別材質 - 換成 Anthropic 避開地區限制
         const material = await callAI(key, "anthropic/claude-3.5-sonnet", [
             { role: "user", content: [
-                { type: "text", text: "Identify the jewelry material: Pearl, Moissanite, Crystal, or Jade. Answer only the word." },
+                { type: "text", text: "Identify jewelry material: Pearl, Moissanite, Crystal, or Jade. Answer ONE word." },
                 { type: "image_url", image_url: { url: resizedUrl } }
             ]}
         ]);
-        status.innerText = `✨ 辨識結果：${material.trim()}。正在生圖 (Flux)...`;
+        
+        status.innerText = `✨ 辨識成功：${material.trim()}。正在生圖 (Flux)...`;
 
-        // 2. 生成邏輯 (改用 Flux-1-Schnell，無地區限制且珠寶效果極佳)
-        const generateImg = async (bg, imgId, btnId) => {
-            let prompt = `A professional studio product photo of a ${material} jewelry, ${bg} background, high-end commercial lighting, 1024x1024. `;
-            if(material.toLowerCase().includes("pearl")) prompt += "Lustrous surfaces, soft glowing reflections.";
-            if(material.toLowerCase().includes("moissanite")) prompt += "Dazzling fire, sharp diamond-like sparkles.";
+        // 2. 生成圖片 - 換成 Flux (最強生圖模型之一，無限制)
+        const generateImg = async (bgDesc, imgId, btnId) => {
+            // Flux 需要比較純粹的文字 Prompt
+            const prompt = `Professional high-end jewelry photography of the ${material} jewelry from the uploaded image. Background: ${bgDesc}. Commercial lighting, 1024x1024, hyper-realistic, sharp focus on gemstone details.`;
 
             const content = await callAI(key, "black-forest-labs/flux-1-schnell", [
                 { role: "user", content: prompt }
@@ -122,33 +87,28 @@ async function processAll() {
 
             const urlMatch = content.match(/https?:\/\/\S+/g);
             if (urlMatch) {
+                const cleanUrl = urlMatch[0].replace(/[")].*$/, "");
                 const el = document.getElementById(imgId);
-                el.src = urlMatch[0].replace(/[")].*$/, ""); // 清理網址
+                el.src = cleanUrl;
                 el.style.display = "block";
                 document.getElementById(btnId).style.display = "inline-block";
             }
         };
 
+        // 一次過生兩張圖
         await Promise.all([
-            generateImg("pure white", "res1", "dl1"),
-            generateImg("minimalist light grey", "res2", "dl2")
+            generateImg("pure seamless white (#FFFFFF)", "res1", "dl1"),
+            generateImg("minimalist aesthetic light grey", "res2", "dl2")
         ]);
 
-        status.innerText = "🎉 生成成功！快睇吓效果！";
+        status.innerText = "🎉 生成完畢！";
     } catch (e) {
-        status.innerText = "❌ 報錯: " + e.message;
+        status.innerText = "❌ 報錯，請看下方數據";
+        debugBox.innerText = "出錯位置/原因: " + e.message;
+        debugBox.style.display = "block";
     } finally {
         mainBtn.disabled = false;
     }
-}
-
-function downloadImg(index) {
-    const sku = document.getElementById('sku').value;
-    const img = document.getElementById(`res${index}`);
-    const link = document.createElement('a');
-    link.href = img.src;
-    link.download = `${sku}-${index}.jpg`;
-    link.click();
 }
 </script>
 
