@@ -3,119 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>珠寶 AI 攝影師 - 多重保險版</title>
+    <title>珠寶 AI 攝影師 - 救命穩定版</title>
     <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; text-align: center; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: left; }
+        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #fdfdfd; text-align: center; }
+        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: left; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 25px; }
-        .box { border: 2px dashed #e2e8f0; padding: 20px; border-radius: 15px; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; }
-        img { max-width: 100%; border-radius: 10px; display: none; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 10px; border: 1px solid #e2e8f0; box-sizing: border-box; font-size: 16px; }
-        button { background: #2563eb; color: white; font-weight: bold; cursor: pointer; border: none; }
-        button:disabled { background: #cbd5e1; cursor: not-allowed; }
-        #status { color: #2563eb; font-weight: bold; margin: 20px 0; text-align: center; }
-        #debug { background: #0f172a; color: #38bdf8; padding: 15px; font-size: 12px; display: none; text-align: left; overflow: auto; max-height: 200px; border-radius: 10px; margin-top: 20px; }
+        .box { border: 2px dashed #ddd; padding: 20px; border-radius: 15px; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fafafa; }
+        img { max-width: 100%; border-radius: 10px; display: none; margin-bottom: 15px; }
+        input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
+        button { background: #000; color: white; font-weight: bold; cursor: pointer; border: none; }
+        #status { color: #d32f2f; font-weight: bold; margin: 20px 0; }
+        #debug { background: #333; color: #fff; padding: 15px; font-size: 11px; display: none; text-align: left; overflow: auto; max-height: 200px; border-radius: 10px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 style="text-align:center;">💎 珠寶 AI 攝影師 (自動修復版)</h2>
-    <input type="password" id="apiKey" placeholder="貼上 OpenRouter API Key">
+    <h2 style="text-align:center;">💎 珠寶 AI 攝影師 (萬能修正版)</h2>
+    <input type="password" id="apiKey" placeholder="貼上 API Key">
     <input type="text" id="sku" placeholder="輸入 SKU">
     <input type="file" id="fileInput" accept="image/*">
-    <button id="mainBtn" onclick="run()">🚀 開始生成 (自動匹配模型)</button>
+    <button id="mainBtn" onclick="execute()">🚀 立即生成 (Gemini 引擎)</button>
     <div id="status">準備就緒</div>
     <div class="grid">
-        <div class="box"><b>1. 純白背景</b><img id="r1"><button id="d1" style="display:none" onclick="dl(1)">💾 下載</button></div>
-        <div class="box"><b>2. 淺灰背景</b><img id="r2"><button id="d2" style="display:none" onclick="dl(2)">💾 下載</button></div>
+        <div class="box"><b>1. 白底圖</b><img id="r1"><button id="d1" style="display:none" onclick="dl(1)">💾 下載</button></div>
+        <div class="box"><b>2. 灰底圖</b><img id="r2"><button id="d2" style="display:none" onclick="dl(2)">💾 下載</button></div>
     </div>
     <pre id="debug"></pre>
 </div>
 
 <script>
-async function compress(file) {
-    return new Promise(res => {
-        const r = new FileReader();
-        r.onload = e => {
-            const i = new Image();
-            i.onload = () => {
-                const c = document.createElement('canvas');
-                const M = 800; let w = i.width, h = i.height;
-                if(w>h) { if(w>M) { h*=M/w; w=M; } } else { if(h>M) { w*=M/h; h=M; } }
-                c.width = w; c.height = h;
-                c.getContext('2d').drawImage(i, 0, 0, w, h);
-                res(c.toDataURL('image/jpeg', 0.8));
-            };
-            i.src = e.target.result;
-        };
-        r.readAsDataURL(file);
-    });
-}
-
-async function fetchAI(key, model, msgs) {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: model.trim(), messages: msgs })
-    });
-    const data = await res.json();
-    if(data.error) throw new Error(data.error.message);
-    return data.choices[0].message.content;
-}
-
-async function run() {
+async function execute() {
     const key = document.getElementById('apiKey').value;
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const debug = document.getElementById('debug');
-    if(!key || !file) return alert("填寫資料");
+    if(!key || !file) return alert("資料未齊");
 
     document.getElementById('mainBtn').disabled = true;
     debug.style.display = "none";
-    status.innerText = "⏳ 正在辨識材質...";
+    status.innerText = "⏳ 正在分析與生成中 (Gemini 2.0)...";
 
     try {
-        const img = await compress(file);
-        const matRaw = await fetchAI(key, "meta-llama/llama-3.2-11b-vision-instruct", [
-            { role: "user", content: [{ type: "text", text: "Material? One word." }, { type: "image_url", image_url: { url: img } }] }
-        ]);
-        const m = matRaw.trim().replace(/[^a-zA-Z]/g, '');
-        status.innerText = `✨ 材質: ${m}。正在生成展示圖 (嘗試不同引擎)...`;
+        // 1. 轉 Base64
+        const base64 = await new Promise(res => {
+            const reader = new FileReader();
+            reader.onload = e => res(e.target.result);
+            reader.readAsDataURL(file);
+        });
 
+        // 2. 直接使用 Gemini 2.0 (全能 ID)
+        const callGemini = async (promptText, isVisual) => {
+            const body = {
+                model: "google/gemini-2.0-flash-001",
+                messages: [{
+                    role: "user",
+                    content: isVisual 
+                        ? [{ type: "text", text: promptText }, { type: "image_url", image_url: { url: base64 } }]
+                        : [{ type: "text", text: promptText }]
+                }]
+            };
+            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if(data.error) throw new Error(data.error.message);
+            return data.choices[0].message.content;
+        };
+
+        // 步驟 A: 辨識材質
+        const mat = await callGemini("What is this jewelry made of? One word only.", true);
+        const material = mat.trim().replace(/[^a-zA-Z]/g, '');
+        status.innerText = `✨ 材質: ${material}。正在生成展示圖...`;
+
+        // 步驟 B: 生圖 (Gemini 會調用內部工具或回傳穩定網址)
         const gen = async (bg, id, btn) => {
-            const p = `Professional jewelry photography, ${m}, ${bg} background, studio light.`;
+            const p = `Generate a professional commercial photography image URL for a ${material} jewelry piece, centered on ${bg} background, studio light, 8k resolution. Return ONLY the image URL.`;
+            const result = await callGemini(p, false);
+            const urlMatch = result.match(/https?:\/\/\S+/g);
+            if(!urlMatch) throw new Error("未能生成圖片網址，請確認帳戶是否有權限");
             
-            // 【多重保險】嘗試多個可能的 Model ID
-            const models = [
-                "black-forest-labs/flux-schnell",
-                "google/gemini-2.0-flash-001",
-                "anthropic/claude-3.5-sonnet"
-            ];
-
-            let lastError = "";
-            for (const modelId of models) {
-                try {
-                    status.innerText = `⏳ 嘗試引擎: ${modelId}...`;
-                    const r = await fetchAI(key, modelId, [{ role: "user", content: p }]);
-                    const uMatch = r.match(/https?:\/\/\S+/g);
-                    if (uMatch) {
-                        const url = uMatch[0].replace(/[")].*$/, "");
-                        document.getElementById(id).src = url;
-                        document.getElementById(id).style.display = "block";
-                        document.getElementById(btn).style.display = "inline-block";
-                        return; // 成功就跳出
-                    }
-                } catch (e) {
-                    lastError = e.message;
-                    continue; // 失敗就試下一個
-                }
-            }
-            throw new Error("所有生圖引擎均不可用: " + lastError);
+            const url = urlMatch[0].replace(/[")].*$/, "");
+            document.getElementById(id).src = url;
+            document.getElementById(id).style.display = "block";
+            document.getElementById(btn).style.display = "inline-block";
         };
 
         await Promise.all([ gen("pure white", "r1", "d1"), gen("soft grey", "r2", "d2") ]);
         status.innerText = "🎉 生成完畢！";
+
     } catch (e) {
         status.innerText = "❌ 失敗";
         debug.innerText = e.message;
