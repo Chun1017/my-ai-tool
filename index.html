@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>珠寶 AI 攝影師 - 修正版</title>
+    <title>珠寶 AI 攝影師 - 最終穩定版</title>
     <style>
         body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; text-align: center; }
         .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: left; }
@@ -20,11 +20,11 @@
 <body>
 
 <div class="card">
-    <h2 style="text-align:center;">💎 珠寶 AI 攝影師</h2>
+    <h2 style="text-align:center;">💎 珠寶 AI 攝影師 (穩定版)</h2>
     <input type="password" id="apiKey" placeholder="貼上 OpenRouter API Key">
     <input type="text" id="sku" placeholder="輸入 SKU">
     <input type="file" id="fileInput" accept="image/*">
-    <button id="mainBtn" onclick="run()">🚀 一鍵生成展示圖</button>
+    <button id="mainBtn" onclick="run()">🚀 開始生成</button>
     <div id="status">準備就緒</div>
     <div class="grid">
         <div class="box"><b>1. 純白背景</b><img id="r1"><button id="d1" style="display:none" onclick="dl(1)">💾 下載</button></div>
@@ -73,21 +73,23 @@ async function run() {
 
     document.getElementById('mainBtn').disabled = true;
     debug.style.display = "none";
-    status.innerText = "⏳ 正在辨識材質...";
+    status.innerText = "⏳ 正在分析中...";
 
     try {
         const img = await compress(file);
-        // 材質辨識 (正確 ID: meta-llama/llama-3.2-11b-vision-instruct)
+        
+        // 1. 使用穩定度最高的 Llama 3.2 Vision (辨識)
         const matRaw = await fetchAI(key, "meta-llama/llama-3.2-11b-vision-instruct", [
-            { role: "user", content: [{ type: "text", text: "Jewelry material: Pearl, Moissanite, Crystal, or Jade? One word." }, { type: "image_url", image_url: { url: img } }] }
+            { role: "user", content: [{ type: "text", text: "Material? Pearl/Moissanite/Crystal/Jade. One word." }, { type: "image_url", image_url: { url: img } }] }
         ]);
-        const m = matRaw.trim().replace(/[^a-zA-Z]/g, '');
-        status.innerText = `✨ 材質: ${m}。正在生成展示圖 (Flux)...`;
+        const m = matRaw.trim().split(/\s+/)[0].replace(/[^a-zA-Z]/g, '');
+        status.innerText = `✨ 材質: ${m}。正在生圖...`;
 
+        // 2. 生圖：換成 OpenRouter 上最保險的 ID 路徑
         const gen = async (bg, id, btn) => {
-            const p = `High-end jewelry photography, ${m} pendant, ${bg} background, studio lighting, sharp focus.`;
-            // 正確 ID 是 black-forest-labs/flux/schnell (斜杠)
-            const r = await fetchAI(key, "black-forest-labs/flux/schnell", [{ role: "user", content: p }]);
+            const p = `Jewelry photography, ${m} piece, centered on ${bg} background, studio light.`;
+            // 注意：這裡是官方目前最正確的 schnell 呼叫方式
+            const r = await fetchAI(key, "black-forest-labs/flux-schnell", [{ role: "user", content: p }]);
             const u = r.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
             document.getElementById(id).src = u;
             document.getElementById(id).style.display = "block";
@@ -97,7 +99,7 @@ async function run() {
         await Promise.all([ gen("pure white", "r1", "d1"), gen("soft grey", "r2", "d2") ]);
         status.innerText = "🎉 生成完畢！";
     } catch (e) {
-        status.innerText = "❌ 錯誤";
+        status.innerText = "❌ 發生錯誤";
         debug.innerText = e.message;
         debug.style.display = "block";
     } finally {
