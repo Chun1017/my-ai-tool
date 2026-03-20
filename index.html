@@ -3,58 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>珠寶 AI 攝影師 V1.0 - 省錢優化版</title>
+    <title>珠寶 AI 攝影師 V1.1 - 除錯保險版</title>
     <style>
         body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background: #f4f7f9; }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         .grid-5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
-        .img-box { border: 2px dashed #ccc; padding: 10px; text-align: center; border-radius: 8px; background: #fafafa; }
-        .img-box img { max-width: 100%; display: none; margin-top: 10px; border-radius: 4px; }
-        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd; box-sizing: border-box; }
+        .img-box { border: 2px dashed #ccc; padding: 10px; text-align: center; border-radius: 8px; background: #fafafa; min-height: 100px; }
+        .img-box img { max-width: 100%; display: none; margin-top: 10px; border-radius: 4px; border: 1px solid #eee; }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
         button { background: #1a73e8; color: white; font-weight: bold; cursor: pointer; border: none; }
         button:hover { background: #1557b0; }
-        .status { font-size: 13px; color: #666; margin: 10px 0; min-height: 20px; }
-        #debug { background: #222; color: #4af2a1; padding: 10px; font-size: 11px; border-radius: 5px; display: none; max-height: 200px; overflow: auto; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .status { font-size: 14px; color: #1a73e8; margin: 10px 0; font-weight: bold; text-align: center; }
+        #debug { background: #222; color: #4af2a1; padding: 15px; font-size: 12px; border-radius: 5px; display: none; max-height: 300px; overflow: auto; text-align: left; margin-top: 20px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>💎 珠寶 AI 智能攝影師</h2>
+    <h2>💎 珠寶 AI 智能攝影師 (除錯版)</h2>
     
     <label>1. OpenRouter API Key</label>
-    <input type="password" id="apiKey" placeholder="sk-or-v1-...">
+    <input type="password" id="apiKey" placeholder="貼上 sk-or-v1-...">
 
-    <label>2. 自定 SKU (將作為檔名)</label>
+    <label>2. 自定 SKU (檔名)</label>
     <input type="text" id="sku" placeholder="例如: PE-001">
 
-    <label>3. 上傳商品原圖 (自動壓縮至 1000px)</label>
+    <label>3. 上傳商品原圖</label>
     <input type="file" id="fileInput" accept="image/*">
 
-    <button id="mainBtn" onclick="startProcess()">🚀 開始識別並生成圖片 1 (白底)</button>
+    <button id="mainBtn" onclick="startProcess()">🚀 開始識別並生成圖片</button>
     
     <div id="status" class="status"></div>
 
     <div class="grid-5">
         <div class="img-box" id="box1">
-            <div style="font-size: 12px;">圖片 1 (白底)</div>
+            <div style="font-size: 12px; font-weight: bold;">圖片 1 (白底)</div>
             <img id="res1">
-            <button id="dl1" style="display:none; font-size:12px; padding:5px;" onclick="downloadImg(1)">下載 JPG</button>
+            <button id="dl1" style="display:none; font-size:12px; padding:5px; margin-top:5px;" onclick="downloadImg(1)">💾 下載 JPG</button>
         </div>
-        <div class="img-box">圖片 2 (灰底)</div>
-        <div class="img-box">圖片 3 (細節 A)</div>
-        <div class="img-box">圖片 4 (細節 B)</div>
-        <div class="img-box">圖片 5 (模特兒)</div>
+        <div class="img-box">圖片 2 (灰底) - 待開發</div>
+        <div class="img-box">圖片 3 (細節) - 待開發</div>
+        <div class="img-box">圖片 4 (細節) - 待開發</div>
+        <div class="img-box">圖片 5 (模特兒) - 待開發</div>
     </div>
 
     <pre id="debug"></pre>
 </div>
 
 <script>
-let processedBase64 = ""; // 壓縮後的圖
-let currentMaterial = ""; // 識別出的材質
+// 全域變數
+let processedBase64 = ""; 
+let currentMaterial = ""; 
 
-// 1. 圖片瘦身功能 (核心：慳錢)
+// 圖片壓縮函數
 async function resizeImage(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -62,13 +64,12 @@ async function resizeImage(file) {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 1000; // 網站用 1000px 足夠
+                const MAX_WIDTH = 1000; 
                 const scale = MAX_WIDTH / img.width;
                 canvas.width = MAX_WIDTH;
                 canvas.height = img.height * scale;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                // 壓縮為 JPG, 質量 0.8
                 resolve(canvas.toDataURL('image/jpeg', 0.8));
             };
             img.src = e.target.result;
@@ -77,51 +78,63 @@ async function resizeImage(file) {
     });
 }
 
+// 主要執行函數 (startProcess)
 async function startProcess() {
     const key = document.getElementById('apiKey').value;
     const sku = document.getElementById('sku').value;
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const mainBtn = document.getElementById('mainBtn');
+    const debugBox = document.getElementById('debug');
 
     if (!key || !sku || !file) return alert("請填寫所有欄位並上傳圖片");
 
+    // 重置狀態
     mainBtn.disabled = true;
-    status.innerText = "⏳ 正在壓縮圖片並識別材質...";
+    mainBtn.innerText = "處理中...";
+    status.innerText = "⏳ 步驟 1: 正在壓縮圖片...";
+    debugBox.style.display = "none";
 
     try {
-        // Step 1: 壓縮
+        // 1. 壓縮圖片
         const resizedDataUrl = await resizeImage(file);
         processedBase64 = resizedDataUrl.split(',')[1];
 
-        // Step 2: 識別材質 (使用平價 Gemini 2.0 Flash)
+        // 2. 識別材質
+        status.innerText = "⏳ 步驟 2: 正在辨識珠寶材質...";
         const classifyRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+            headers: { 
+                "Authorization": `Bearer ${key}`, 
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({
                 "model": "google/gemini-2.0-flash-001",
                 "messages": [{ "role": "user", "content": [
-                    { "type": "text", "text": "Identify the jewelry material: Pearl, Moissanite, Crystal, or Jade. Return only the word." },
+                    { "type": "text", "text": "Identify jewelry material. Answer ONE word only: Pearl, Moissanite, Crystal, Jade." },
                     { "type": "image_url", "image_url": { "url": resizedDataUrl } }
                 ]}]
             })
         });
+
         const classifyData = await classifyRes.json();
+        
+        // 【保險檢查 1】
+        if (!classifyData.choices || !classifyData.choices[0]) {
+            throw new Error("材質辨識失敗: " + (classifyData.error?.message || "未知 API 錯誤"));
+        }
+
         currentMaterial = classifyData.choices[0].message.content.trim();
-        status.innerText = `✅ 識別結果：${currentMaterial}。正在生成白底圖...`;
+        status.innerText = `✅ 辨識為：${currentMaterial}。正在生成白底圖...`;
 
-        // Step 3: 生成圖片 1 (白底圖)
-        // 針對不同材質套用 Prompt
-        let prompt = `A professional product photo of a ${currentMaterial} jewelry, pure white (#FFFFFF) background, studio lighting, high resolution 1000x1000.`;
-        if(currentMaterial.includes("Moissanite")) prompt += " Enhance diamond fire and sparkles.";
-        if(currentMaterial.includes("Pearl")) prompt += " Soft pearlescent luster, elegant glow.";
-
+        // 3. 生成圖片 1
+        let prompt = `Product photography of ${currentMaterial} jewelry, pure white (#FFFFFF) background, soft studio lighting, center alignment, 1000x1000.`;
+        
         const genRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-                "model": "google/imagen-3", // 使用生圖模型
-                "prompt": prompt,
+                "model": "google/imagen-3", 
                 "messages": [ { "role": "user", "content": [
                     { "type": "text", "text": prompt },
                     { "type": "image_url", "image_url": { "url": resizedDataUrl } }
@@ -130,29 +143,34 @@ async function startProcess() {
         });
         
         const genData = await genRes.json();
-        const content = genData.choices?.[0]?.message?.content || "";
         
-        // 顯示結果
-        const resImg = document.getElementById('res1');
-        const dlBtn = document.getElementById('dl1');
-        
-        // 這裡判斷 AI 回傳的是網址還是 Base64
+        // 【保險檢查 2】
+        if (!genData.choices || !genData.choices[0]) {
+            throw new Error("生成圖片失敗: " + (genData.error?.message || "請檢查 OpenRouter 餘額"));
+        }
+
+        const content = genData.choices[0].message.content || "";
         const urlMatch = content.match(/https?:\/\/\S+/g);
+        
         if (urlMatch) {
+            const resImg = document.getElementById('res1');
             resImg.src = urlMatch[0];
             resImg.style.display = "block";
-            dlBtn.style.display = "block";
+            document.getElementById('dl1').style.display = "block";
             status.innerText = "✨ 圖片 1 生成成功！";
         } else {
-            status.innerText = "❌ 生成失敗，請查看 Debug Box";
-            document.getElementById('debug').innerText = JSON.stringify(genData, null, 2);
-            document.getElementById('debug').style.display = "block";
+            status.innerText = "❌ 未能取得圖片網址，請看下方調試數據";
+            debugBox.innerText = JSON.stringify(genData, null, 2);
+            debugBox.style.display = "block";
         }
 
     } catch (e) {
-        alert("發生錯誤: " + e.message);
+        status.innerText = "❌ 發生錯誤";
+        alert(e.message);
+        console.error(e);
     } finally {
         mainBtn.disabled = false;
+        mainBtn.innerText = "🚀 開始識別並生成圖片";
     }
 }
 
