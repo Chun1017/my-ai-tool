@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>珠寶 AI 攝影師 - 最終修正</title>
+    <title>珠寶 AI 攝影師 - 修正版</title>
     <style>
         body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; text-align: center; }
         .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: left; }
@@ -22,9 +22,9 @@
 <div class="card">
     <h2 style="text-align:center;">💎 珠寶 AI 攝影師</h2>
     <input type="password" id="apiKey" placeholder="貼上 OpenRouter API Key">
-    <input type="text" id="sku" placeholder="輸入 SKU (下載檔名)">
+    <input type="text" id="sku" placeholder="輸入 SKU (下載檔名使用)">
     <input type="file" id="fileInput" accept="image/*">
-    <button id="mainBtn" onclick="run()">🚀 一鍵生成展示圖</button>
+    <button id="mainBtn" onclick="runProcess()">🚀 開始生成</button>
     <div id="status">準備就緒</div>
     <div class="grid">
         <div class="box"><b>1. 純白背景</b><img id="r1"><button id="d1" style="display:none" onclick="dl(1)">💾 下載</button></div>
@@ -34,7 +34,6 @@
 </div>
 
 <script>
-// 1. 圖片壓縮
 async function compress(file) {
     return new Promise(res => {
         const r = new FileReader();
@@ -54,45 +53,43 @@ async function compress(file) {
     });
 }
 
-// 2. API 呼叫
-async function ask(key, model, msgs) {
+async function askAI(key, model, msgs) {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: model.trim(), messages: msgs }) // 強制 trim() 走空格
+        body: JSON.stringify({ model: model, messages: msgs })
     });
     const data = await res.json();
     if(data.error) throw new Error(data.error.message);
     return data.choices[0].message.content;
 }
 
-// 3. 運行
-async function run() {
+async function runProcess() {
     const key = document.getElementById('apiKey').value;
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const debug = document.getElementById('debug');
-    if(!key || !file) return alert("填寫 Key 並選圖");
+    if(!key || !file) return alert("請填寫 Key 並選擇圖片");
 
     document.getElementById('mainBtn').disabled = true;
     debug.style.display = "none";
-    status.innerText = "⏳ 正在分析中...";
+    status.innerText = "⏳ 正在辨識材質...";
 
     try {
-        const img = await compress(file);
-        // 材質辨識 (用 Meta Llama 最穩)
-        const mat = await ask(key, "meta-llama/llama-3.2-11b-vision-instruct", [
-            { role: "user", content: [{ type: "text", text: "Material: Pearl, Moissanite, Crystal, or Jade? One word." }, { type: "image_url", image_url: { url: img } }] }
+        const img64 = await compress(file);
+        // 材質辨識
+        const materialRaw = await askAI(key, "meta-llama/llama-3.2-11b-vision-instruct", [
+            { role: "user", content: [{ type: "text", text: "One word: Pearl, Moissanite, Crystal, or Jade?" }, { type: "image_url", image_url: { url: img64 } }] }
         ]);
-        const m = mat.trim().replace(/[^a-zA-Z]/g, '');
-        status.innerText = `✨ 材質: ${m}。正在生圖 (Flux)...`;
+        const mat = materialRaw.trim().replace(/[^a-zA-Z]/g, '');
+        status.innerText = `✨ 材質: ${mat}。正在生成展示圖...`;
 
         const gen = async (bg, id, btn) => {
-            const p = `Professional jewelry photography, ${m} piece, centered on ${bg} background, studio light, 1024x1024.`;
-            // 更換為正確的 Model ID：black-forest-labs/flux-schnell
-            const r = await ask(key, "black-forest-labs/flux-schnell", [{ role: "user", content: p }]);
-            const u = r.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
-            document.getElementById(id).src = u;
+            const prompt = `Jewelry photography, ${mat} pendant, ${bg} background, studio lighting, high resolution.`;
+            // 修正後的 Model ID
+            const result = await askAI(key, "black-forest-labs/flux-schnell", [{ role: "user", content: prompt }]);
+            const url = result.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
+            document.getElementById(id).src = url;
             document.getElementById(id).style.display = "block";
             document.getElementById(btn).style.display = "inline-block";
         };
@@ -100,7 +97,7 @@ async function run() {
         await Promise.all([ gen("pure white", "r1", "d1"), gen("light grey", "r2", "d2") ]);
         status.innerText = "🎉 生成完畢！";
     } catch (e) {
-        status.innerText = "❌ 報錯了";
+        status.innerText = "❌ 發生錯誤";
         debug.innerText = e.message;
         debug.style.display = "block";
     } finally {
