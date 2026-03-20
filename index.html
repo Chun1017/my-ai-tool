@@ -3,50 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>珠寶 AI 攝影師 - 香港免 VPN 穩定版</title>
+    <title>珠寶 AI 攝影師 - 最終修復版</title>
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; color: #334155; text-align: center; }
+        body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; text-align: center; }
         .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: left; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 25px; }
-        .box { border: 2px dashed #e2e8f0; padding: 20px; border-radius: 15px; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; transition: 0.3s; }
-        .box:hover { border-color: #3b82f6; }
+        .box { border: 2px dashed #e2e8f0; padding: 20px; border-radius: 15px; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; }
         img { max-width: 100%; border-radius: 10px; display: none; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 10px; border: 1px solid #e2e8f0; box-sizing: border-box; font-size: 16px; }
-        button { background: #2563eb; color: white; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; }
-        button:hover { background: #1d4ed8; }
+        button { background: #2563eb; color: white; font-weight: bold; cursor: pointer; border: none; }
         button:disabled { background: #cbd5e1; cursor: not-allowed; }
-        #status { color: #2563eb; font-weight: bold; margin: 20px 0; text-align: center; min-height: 24px; }
+        #status { color: #2563eb; font-weight: bold; margin: 20px 0; text-align: center; }
         #debug { background: #0f172a; color: #38bdf8; padding: 15px; font-size: 12px; display: none; text-align: left; overflow: auto; max-height: 200px; border-radius: 10px; margin-top: 20px; white-space: pre-wrap; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 style="text-align:center; margin-top:0;">💎 珠寶 AI 攝影師 <span style="font-size:14px; color:#64748b;">V1.5</span></h2>
+    <h2 style="text-align:center;">💎 珠寶 AI 攝影師</h2>
     
-    <label style="font-size:14px; font-weight:600;">OpenRouter API Key</label>
-    <input type="password" id="apiKey" placeholder="sk-or-v1-...">
-
-    <label style="font-size:14px; font-weight:600;">商品 SKU (例如: BLUE-HEART-01)</label>
-    <input type="text" id="sku" placeholder="以此作為下載檔名">
-
-    <label style="font-size:14px; font-weight:600;">上傳珠寶原圖</label>
+    <input type="password" id="apiKey" placeholder="貼上 OpenRouter API Key">
+    <input type="text" id="sku" placeholder="輸入 SKU (例如: HEART-BLUE)">
     <input type="file" id="fileInput" accept="image/*">
 
-    <button id="mainBtn" onclick="startApp()">🚀 一鍵生成展示圖 (免 VPN)</button>
+    <button id="mainBtn" onclick="runAll()">🚀 生成展示圖</button>
     
-    <div id="status">準備就緒，請上傳圖片</div>
+    <div id="status">請上傳圖片並點擊生成</div>
     
     <div class="grid">
         <div class="box">
-            <b style="margin-bottom:10px;">1. 純白背景 (Amazon/eBay)</b>
-            <img id="img1">
-            <button id="btn1" style="display:none; width:auto; font-size:13px; padding:8px 15px;" onclick="downloadImg(1)">💾 下載圖片</button>
+            <b>1. 純白背景</b>
+            <img id="res1">
+            <button id="dl1" style="display:none; width:auto;" onclick="downloadImg(1)">💾 下載 -1</button>
         </div>
         <div class="box">
-            <b style="margin-bottom:10px;">2. 淺灰背景 (網站展示)</b>
-            <img id="img2">
-            <button id="btn2" style="display:none; width:auto; font-size:13px; padding:8px 15px;" onclick="downloadImg(2)">💾 下載圖片</button>
+            <b>2. 淺灰背景</b>
+            <img id="res2">
+            <button id="dl2" style="display:none; width:auto;" onclick="downloadImg(2)">💾 下載 -2</button>
         </div>
     </div>
     
@@ -54,20 +47,20 @@
 </div>
 
 <script>
-// 1. 圖片壓縮邏輯 (定義在最前面，確保唔會出現 not defined)
-async function handleImage(file) {
+// 1. 圖片壓縮 (確保 resizeImage 被定義)
+async function resizeImage(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_SIZE = 800; 
-                let width = img.width, height = img.height;
-                if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
-                else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
-                canvas.width = width; canvas.height = height;
-                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                const MAX = 800;
+                let w = img.width, h = img.height;
+                if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } 
+                else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                 resolve(canvas.toDataURL('image/jpeg', 0.8));
             };
             img.src = e.target.result;
@@ -76,80 +69,64 @@ async function handleImage(file) {
     });
 }
 
-// 2. 通用 API 請求 (加入強大錯誤攔截)
-async function requestAI(key, model, payload) {
+// 2. API 請求
+async function callOpenRouter(key, model, payload) {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: { 
-            "Authorization": `Bearer ${key}`, 
-            "Content-Type": "application/json",
-            "HTTP-Referer": window.location.origin
-        },
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model: model, messages: payload })
     });
-    
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
-    if (!data.choices || data.choices.length === 0) throw new Error("API 無法回傳結果，請檢查餘額");
     return data.choices[0].message.content;
 }
 
-// 3. 執行流程
-async function startApp() {
+// 3. 主程序
+async function runAll() {
     const key = document.getElementById('apiKey').value;
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const mainBtn = document.getElementById('mainBtn');
     const debug = document.getElementById('debug');
 
-    if (!key || !file) return alert("請輸入 API Key 並選取圖片");
+    if (!key || !file) return alert("請輸入 Key 並上傳圖片");
 
     mainBtn.disabled = true;
     debug.style.display = "none";
-    status.innerText = "⏳ 步驟 1: 正在優化原圖...";
+    status.innerText = "⏳ 步驟 1: 正在處理圖片...";
 
     try {
-        const base64Img = await handleImage(file);
+        const base64 = await resizeImage(file);
         
-        // 步驟 2: 材質辨識 (使用 Llama-3.2-11b-Vision)
-        status.innerText = "⏳ 步驟 2: 正在辨識珠寶材質 (Meta Llama)...";
-        const materialRaw = await requestAI(key, "meta-llama/llama-3.2-11b-vision-instruct", [
+        status.innerText = "⏳ 步驟 2: 正在辨識材質...";
+        const mat = await callOpenRouter(key, "meta-llama/llama-3.2-11b-vision-instruct", [
             { role: "user", content: [
-                { type: "text", text: "What is this jewelry made of? (Pearl, Moissanite, Crystal, or Jade). Answer ONE word only." },
-                { type: "image_url", image_url: { url: base64Img } }
+                { type: "text", text: "Material? One word: Pearl, Moissanite, Crystal, or Jade." },
+                { type: "image_url", image_url: { url: base64 } }
             ]}
         ]);
-        const material = materialRaw.trim().split(/\s+/)[0].replace(/[^a-zA-Z]/g, '');
+        const material = mat.trim().replace(/[^a-zA-Z]/g, '');
 
-        status.innerText = `✨ 辨識成功：${material}。步驟 3: 正在生圖 (Flux)...`;
+        status.innerText = `✨ 材質：${material}。步驟 3: 正在生圖...`;
 
-        // 步驟 3: 生圖函數
-        const generate = async (bg, imgId, btnId) => {
-            const prompt = `Professional jewelry photography, ${material} piece, centered on ${bg} background, cinematic studio lighting, 8k resolution, photorealistic, sharp focus.`;
-            const result = await requestAI(key, "black-forest-labs/flux-1-schnell", [
+        const gen = async (bg, imgId, btnId) => {
+            const prompt = `Professional jewelry photo, ${material}, ${bg} background, studio light, 1024x1024, high detail.`;
+            // 修正：呢度 model ID 絕對無空格
+            const result = await callOpenRouter(key, "black-forest-labs/flux-1-schnell", [
                 { role: "user", content: prompt }
             ]);
-            
-            const urlMatch = result.match(/https?:\/\/\S+/g);
-            if (!urlMatch) throw new Error("未能獲取圖片網址");
-            
-            const imgUrl = urlMatch[0].replace(/[")].*$/, "");
-            document.getElementById(imgId).src = imgUrl;
+            const url = result.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
+            document.getElementById(imgId).src = url;
             document.getElementById(imgId).style.display = "block";
             document.getElementById(btnId).style.display = "inline-block";
         };
 
-        // 同時生兩張，節省時間
-        await Promise.all([
-            generate("pure white (#FFFFFF)", "img1", "btn1"),
-            generate("aesthetic soft light grey", "img2", "btn2")
-        ]);
-
-        status.innerText = "🎉 圖片生成成功！";
+        await Promise.all([ gen("pure white", "res1", "dl1"), gen("light grey", "res2", "dl2") ]);
+        status.innerText = "🎉 生成成功！";
 
     } catch (err) {
-        status.innerText = "❌ 處理失敗";
-        debug.innerText = "詳細錯誤內容：\n" + err.message;
+        status.innerText = "❌ 發生錯誤";
+        debug.innerText = err.message;
         debug.style.display = "block";
     } finally {
         mainBtn.disabled = false;
@@ -157,13 +134,12 @@ async function startApp() {
 }
 
 function downloadImg(i) {
-    const sku = document.getElementById('sku').value || "jewel";
+    const sku = document.getElementById('sku').value || "item";
     const a = document.createElement('a');
-    a.href = document.getElementById(`img${i}`).src;
+    a.href = document.getElementById(`res${i}`).src;
     a.download = `${sku}-${i}.jpg`;
     a.click();
 }
 </script>
-
 </body>
 </html>
