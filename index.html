@@ -3,191 +3,166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini 3.1 AI 商品去背工具 (本地上傳版)</title>
+    <title>珠寶 AI 攝影師 V1.0 - 省錢優化版</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f0f2f5; color: #333; }
-        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
-        h2 { color: #1a73e8; margin-top: 0; display: flex; align-items: center; gap: 10px; }
-        .input-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; color: #5f6368; }
-        input[type="password"], input[type="file"], button { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
-        input[type="password"]:focus { border-color: #1a73e8; outline: none; box-shadow: 0 0 0 3px rgba(26,115,232,0.2); }
-        input[type="file"] { background: #f8f9fa; cursor: pointer; }
-        button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 15px; transition: background 0.3s; padding: 15px; }
+        body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background: #f4f7f9; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .grid-5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
+        .img-box { border: 2px dashed #ccc; padding: 10px; text-align: center; border-radius: 8px; background: #fafafa; }
+        .img-box img { max-width: 100%; display: none; margin-top: 10px; border-radius: 4px; }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: #1a73e8; color: white; font-weight: bold; cursor: pointer; border: none; }
         button:hover { background: #1557b0; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        .result-container { margin-top: 30px; text-align: center; }
-        img { max-width: 100%; border-radius: 8px; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid #eee; background: white; }
-        #debug-box { background: #202124; color: #34a853; padding: 15px; margin-top: 20px; border-radius: 8px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; white-space: pre-wrap; display: none; overflow-x: auto; text-align: left; }
-        .loader { display: none; color: #666; font-size: 14px; margin: 15px 0; text-align: center; font-style: italic; }
-        .preview-container { margin-top: 10px; text-align: center; display: none; }
-        #previewImage { max-height: 150px; border-radius: 4px; border: 1px solid #eee; }
+        .status { font-size: 13px; color: #666; margin: 10px 0; min-height: 20px; }
+        #debug { background: #222; color: #4af2a1; padding: 10px; font-size: 11px; border-radius: 5px; display: none; max-height: 200px; overflow: auto; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>📸 Gemini 3.1 商品去背換白底</h2>
+    <h2>💎 珠寶 AI 智能攝影師</h2>
     
-    <div class="input-group">
-        <label>1. OpenRouter API Key</label>
-        <input type="password" id="apiKey" placeholder="貼上 sk-or-v1-...">
-    </div>
+    <label>1. OpenRouter API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-or-v1-...">
+
+    <label>2. 自定 SKU (將作為檔名)</label>
+    <input type="text" id="sku" placeholder="例如: PE-001">
+
+    <label>3. 上傳商品原圖 (自動壓縮至 1000px)</label>
+    <input type="file" id="fileInput" accept="image/*">
+
+    <button id="mainBtn" onclick="startProcess()">🚀 開始識別並生成圖片 1 (白底)</button>
     
-    <div class="input-group">
-        <label>2. 上傳商品圖片 (本地檔案)</label>
-        <input type="file" id="fileInput" accept="image/png, image/jpeg, image/webp" onchange="previewFile()">
-        <div class="preview-container" id="previewContainer">
-            <label style="font-size: 12px; font-weight: normal;">(待處理原圖預覽)</label>
-            <img id="previewImage" alt="原圖預覽">
+    <div id="status" class="status"></div>
+
+    <div class="grid-5">
+        <div class="img-box" id="box1">
+            <div style="font-size: 12px;">圖片 1 (白底)</div>
+            <img id="res1">
+            <button id="dl1" style="display:none; font-size:12px; padding:5px;" onclick="downloadImg(1)">下載 JPG</button>
         </div>
-    </div>
-    
-    <button id="submitBtn" onclick="generate()">🚀 執行 Gemini 圖片生成</button>
-    <div id="loader" class="loader">正在讀取檔案並呼叫 Gemini 3.1 進行深度去背... (請稍候)</div>
-
-    <div class="result-container">
-        <label id="resultLabel" style="display: none; color: #1a73e8;">✨ AI 生成結果 (純白背景) ✨</label>
-        <img id="resultImage" alt="AI 生成結果">
+        <div class="img-box">圖片 2 (灰底)</div>
+        <div class="img-box">圖片 3 (細節 A)</div>
+        <div class="img-box">圖片 4 (細節 B)</div>
+        <div class="img-box">圖片 5 (模特兒)</div>
     </div>
 
-    <div id="debug-box"></div>
+    <pre id="debug"></pre>
 </div>
 
 <script>
-// 預覽上傳的圖片
-function previewFile() {
-    const file = document.getElementById('fileInput').files[0];
-    const preview = document.getElementById('previewImage');
-    const container = document.getElementById('previewContainer');
-    const reader = new FileReader();
+let processedBase64 = ""; // 壓縮後的圖
+let currentMaterial = ""; // 識別出的材質
 
-    reader.onloadend = function () {
-        preview.src = reader.result;
-        container.style.display = 'block';
-        preview.style.display = 'inline-block';
-    }
-
-    if (file) {
+// 1. 圖片瘦身功能 (核心：慳錢)
+async function resizeImage(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1000; // 網站用 1000px 足夠
+                const scale = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                // 壓縮為 JPG, 質量 0.8
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = e.target.result;
+        };
         reader.readAsDataURL(file);
-    } else {
-        preview.src = "";
-        container.style.display = 'none';
+    });
+}
+
+async function startProcess() {
+    const key = document.getElementById('apiKey').value;
+    const sku = document.getElementById('sku').value;
+    const file = document.getElementById('fileInput').files[0];
+    const status = document.getElementById('status');
+    const mainBtn = document.getElementById('mainBtn');
+
+    if (!key || !sku || !file) return alert("請填寫所有欄位並上傳圖片");
+
+    mainBtn.disabled = true;
+    status.innerText = "⏳ 正在壓縮圖片並識別材質...";
+
+    try {
+        // Step 1: 壓縮
+        const resizedDataUrl = await resizeImage(file);
+        processedBase64 = resizedDataUrl.split(',')[1];
+
+        // Step 2: 識別材質 (使用平價 Gemini 2.0 Flash)
+        const classifyRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                "model": "google/gemini-2.0-flash-001",
+                "messages": [{ "role": "user", "content": [
+                    { "type": "text", "text": "Identify the jewelry material: Pearl, Moissanite, Crystal, or Jade. Return only the word." },
+                    { "type": "image_url", "image_url": { "url": resizedDataUrl } }
+                ]}]
+            })
+        });
+        const classifyData = await classifyRes.json();
+        currentMaterial = classifyData.choices[0].message.content.trim();
+        status.innerText = `✅ 識別結果：${currentMaterial}。正在生成白底圖...`;
+
+        // Step 3: 生成圖片 1 (白底圖)
+        // 針對不同材質套用 Prompt
+        let prompt = `A professional product photo of a ${currentMaterial} jewelry, pure white (#FFFFFF) background, studio lighting, high resolution 1000x1000.`;
+        if(currentMaterial.includes("Moissanite")) prompt += " Enhance diamond fire and sparkles.";
+        if(currentMaterial.includes("Pearl")) prompt += " Soft pearlescent luster, elegant glow.";
+
+        const genRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                "model": "google/imagen-3", // 使用生圖模型
+                "prompt": prompt,
+                "messages": [ { "role": "user", "content": [
+                    { "type": "text", "text": prompt },
+                    { "type": "image_url", "image_url": { "url": resizedDataUrl } }
+                ]}]
+            })
+        });
+        
+        const genData = await genRes.json();
+        const content = genData.choices?.[0]?.message?.content || "";
+        
+        // 顯示結果
+        const resImg = document.getElementById('res1');
+        const dlBtn = document.getElementById('dl1');
+        
+        // 這裡判斷 AI 回傳的是網址還是 Base64
+        const urlMatch = content.match(/https?:\/\/\S+/g);
+        if (urlMatch) {
+            resImg.src = urlMatch[0];
+            resImg.style.display = "block";
+            dlBtn.style.display = "block";
+            status.innerText = "✨ 圖片 1 生成成功！";
+        } else {
+            status.innerText = "❌ 生成失敗，請查看 Debug Box";
+            document.getElementById('debug').innerText = JSON.stringify(genData, null, 2);
+            document.getElementById('debug').style.display = "block";
+        }
+
+    } catch (e) {
+        alert("發生錯誤: " + e.message);
+    } finally {
+        mainBtn.disabled = false;
     }
 }
 
-async function generate() {
-    const apiKey = document.getElementById('apiKey').value;
-    const fileInput = document.getElementById('fileInput');
-    const btn = document.getElementById('submitBtn');
-    const loader = document.getElementById('loader');
-    const resultImg = document.getElementById('resultImage');
-    const resultLabel = document.getElementById('resultLabel');
-    const debugBox = document.getElementById('debug-box');
-
-    // 檢查輸入
-    if (!apiKey) return alert('請填寫 OpenRouter API Key');
-    if (!fileInput.files[0]) return alert('請選擇要上傳的商品圖片');
-
-    // 初始化介面狀態
-    btn.disabled = true;
-    btn.innerText = '處理中...';
-    loader.style.display = 'block';
-    debugBox.style.display = 'none';
-    resultImg.style.display = 'none';
-    resultLabel.style.display = 'none';
-
-    try {
-        // 1. 讀取本地檔案並轉 Base64
-        const file = fileInput.files[0];
-        const base64Data = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result.split(',')[1]); // 唯取 Base64 內容
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-        const mimeType = file.type;
-
-        loader.innerText = '圖片已加密傳輸，正在等候 Gemini 3.1 生成新圖...';
-
-        // 2. 呼叫 OpenRouter
-        const modelId = "google/gemini-3.1-flash-image-preview";
-        
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-                // 建議加上 HTTP-Referer，OpenRouter 偶爾會檢查
-                "HTTP-Referer": window.location.href
-            },
-            body: JSON.stringify({
-                "model": modelId,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            { 
-                                "type": "text", 
-                                "text": "Task: Professional product photo recreation. Action: Generate a new high-resolution image of the exact product shown in this photo, placed on a perfectly seamless, 100% pure white (#FFFFFF) studio background. Requirement: Retain the product's identity, textures, lighting, and details precisely. Output: Return the image URL or image data." 
-                            },
-                            { 
-                                "type": "image_url", 
-                                "image_url": { "url": `data:${mimeType};base64,${base64Data}` } 
-                            }
-                        ]
-                    }
-                ],
-                // 建議加上這個，有些模型生圖需要
-                "response_format": { "type": "text" }
-            })
-        });
-
-        const data = await response.json();
-        
-        // 顯示 Debug 資訊 (幫助檢查回傳格式)
-        debugBox.innerText = "連線成功！回傳 JSON 數據：\n" + JSON.stringify(data, null, 2);
-        debugBox.style.display = 'block';
-
-        if (!response.ok) throw new Error(`API 回報錯誤: ${data.error?.message || response.statusText}`);
-
-        // 3. 尋找圖片 (處理 URL 或 Base64)
-        const content = data.choices?.[0]?.message?.content || "";
-        let foundImage = false;
-        
-        // 嘗試從文字中抓取 URL (有些模型會直接回傳連結)
-        const urlMatch = content.match(/\bhttps?:\/\/\S+(?:png|jpg|jpeg|webp)\S*/gi);
-        if (urlMatch) {
-            resultImg.src = urlMatch[0];
-            foundImage = true;
-        } 
-        // 嘗試辨識回傳文字中的 Base64 數據
-        else if (content.includes("data:image")) {
-            const base64Match = content.match(/data:image\/[a-zA-Z]*;base64,[^\s"]+/);
-            if (base64Match) {
-                resultImg.src = base64Match[0];
-                foundImage = true;
-            }
-        }
-
-        // 4. 顯示結果
-        if (foundImage) {
-            resultImg.style.display = 'inline-block';
-            resultLabel.style.display = 'block';
-            debugBox.style.display = 'none'; // 成功後隱藏 debug
-        } else {
-            console.log("未在回傳文字中偵測到圖片網址或 Base64 數據，請檢查 Debug Box。");
-            alert("Gemini 回傳了文字，但未包含圖片數據。這可能是模型目前的限制。");
-        }
-
-    } catch (err) {
-        alert('發生錯誤: ' + err.message);
-        console.error(err);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = '🚀 執行 Gemini 圖片生成';
-        loader.style.display = 'none';
-    }
+function downloadImg(index) {
+    const sku = document.getElementById('sku').value;
+    const img = document.getElementById(`res${index}`);
+    const link = document.createElement('a');
+    link.href = img.src;
+    link.download = `${sku}-${index}.jpg`;
+    link.click();
 }
 </script>
 
