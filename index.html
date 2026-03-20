@@ -2,51 +2,59 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 - 極速重生版</title>
+    <title>珠寶 AI 攝影師 - 穩定版 (DALL-E3 路由)</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #fff; text-align: center; border: 1px solid #eee; border-radius: 20px; }
-        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ddd; }
+        body { font-family: -apple-system, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #fff; text-align: center; border: 1px solid #f0f0f0; border-radius: 20px; }
+        h3 { margin-bottom: 25px; }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #eee; box-sizing: border-box; }
         button { background: #000; color: #fff; cursor: pointer; font-weight: bold; }
-        #status { color: #2563eb; font-weight: bold; margin: 20px 0; }
-        img { max-width: 100%; border-radius: 10px; display: none; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        #debug { font-size: 11px; color: red; text-align: left; background: #f9f9f9; padding: 10px; display: none; margin-top: 20px; }
+        button:disabled { background: #ccc; }
+        #status { color: #d32f2f; font-weight: bold; margin: 20px 0; font-size: 14px; }
+        img { max-width: 100%; border-radius: 8px; display: none; margin-top: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        #debug { font-size: 11px; color: red; text-align: left; background: #fafafa; padding: 10px; display: none; margin-top: 20px; overflow-x: auto;}
     </style>
 </head>
 <body>
 
     <h3>💎 珠寶 AI 攝影師</h3>
+    
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
-    <input type="file" id="fileInput">
-    <button id="btn" onclick="run()">🚀 立即生圖 (DALL-E 3 路由)</button>
+    <input type="file" id="fileInput" accept="image/*">
+    <button id="btn" onclick="startGenerate()">🚀 立即生圖 (穩定引擎)</button>
     
     <div id="status">準備就緒 (請開 VPN)</div>
-    <img id="output">
+    
+    <div style="display:flex; justify-content:center;">
+        <img id="out">
+    </div>
+    
     <pre id="debug"></pre>
 
 <script>
-async function run() {
+async function startGenerate() {
     const key = document.getElementById('key').value;
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const debug = document.getElementById('debug');
-    const out = document.getElementById('output');
+    const out = document.getElementById('out');
+    const btn = document.getElementById('btn');
 
-    if(!key || !file) return alert("請填寫 Key 同選圖");
+    if(!key || !file) return alert("請填寫 Key 並選圖");
 
-    status.innerText = "⏳ 正在分析圖片...";
+    btn.disabled = true;
+    status.innerText = "⏳ 正在分析圖片並生成 (約需 20-30 秒)...";
     debug.style.display = "none";
     out.style.display = "none";
 
     try {
+        // 1. 轉 Base64
         const b64 = await new Promise(r => {
             const f = new FileReader();
             f.onload = e => r(e.target.result);
             f.readAsDataURL(file);
         });
 
-        // 1. 使用最穩定的 GPT-4o-mini 來生成圖片指令
-        status.innerText = "⏳ 正在生成展示圖 (可能需要 20-30 秒)...";
-        
+        // 2. 使用最穩定的 GPT-4o-mini 來生圖
         const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: { 
@@ -54,11 +62,11 @@ async function run() {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "openai/gpt-4o-mini", 
+                model: "openai/gpt-4o-mini", // 改用穩定性極高的 ID
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Based on this jewelry, generate a professional commercial photo on pure white background. Return only the direct image URL." },
+                        { type: "text", text: "Generate a professional, isolated commercial product photo of this jewelry piece on a pure white background. Return only the image URL." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -69,21 +77,26 @@ async function run() {
         if(data.error) throw new Error(data.error.message);
 
         const content = data.choices[0].message.content;
+        
+        // 更靈活嘅網址抓取邏輯
         const urlMatch = content.match(/https?:\/\/\S+/g);
 
         if(urlMatch) {
-            const url = urlMatch[0].replace(/[")].*$/, "");
+            // 清理 URL，去掉可能嘅引號或括號
+            const url = urlMatch[0].replace(/[">].*$/, "");
             out.src = url;
             out.style.display = "block";
-            status.innerText = "🎉 生成完畢！";
+            status.innerText = "🎉 生成成功！你可以對圖儲存。";
         } else {
-            throw new Error("AI 回傳了文字但沒有網址：" + content);
+            throw new Error("AI 回傳咗內容但搵唔到網址：" + content);
         }
 
     } catch (e) {
-        status.innerText = "❌ 失敗";
-        debug.innerText = e.message;
+        status.innerText = "❌ 生成失敗";
+        debug.innerText = "詳細錯誤：" + e.message;
         debug.style.display = "block";
+    } finally {
+        btn.disabled = false;
     }
 }
 </script>
