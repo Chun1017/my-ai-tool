@@ -3,30 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>珠寶 AI 攝影師 - 最終救贖版</title>
+    <title>珠寶 AI 攝影師 - 最終修復版</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f0f2f5; text-align: center; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: left; }
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; text-align: center; }
+        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: left; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 25px; }
-        .box { border: 2px dashed #cbd5e1; padding: 20px; border-radius: 15px; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; }
-        img { max-width: 100%; border-radius: 10px; display: none; margin-bottom: 15px; }
+        .box { border: 2px dashed #e2e8f0; padding: 20px; border-radius: 15px; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; }
+        img { max-width: 100%; border-radius: 10px; display: none; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 10px; border: 1px solid #e2e8f0; box-sizing: border-box; font-size: 16px; }
-        button { background: #1e293b; color: white; font-weight: bold; cursor: pointer; border: none; }
-        button:disabled { background: #94a3b8; }
+        button { background: #2563eb; color: white; font-weight: bold; cursor: pointer; border: none; }
+        button:disabled { background: #cbd5e1; cursor: not-allowed; }
         #status { color: #2563eb; font-weight: bold; margin: 20px 0; }
-        #log { background: #1e293b; color: #38bdf8; padding: 15px; font-size: 11px; border-radius: 10px; margin-top: 20px; white-space: pre-wrap; display: none; text-align: left; max-height: 200px; overflow-y: auto; }
+        #log { background: #0f172a; color: #38bdf8; padding: 15px; font-size: 11px; border-radius: 10px; margin-top: 20px; white-space: pre-wrap; display: none; text-align: left; max-height: 200px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 style="text-align:center;">💎 珠寶 AI 攝影師 (終極修正)</h2>
+    <h2 style="text-align:center;">💎 珠寶 AI 攝影師 (ID 修正版)</h2>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="text" id="sku" placeholder="輸入 SKU">
     <input type="file" id="fileInput">
-    <button id="mainBtn" onclick="start()">🚀 一鍵生圖 (自動匹配可用模型)</button>
+    <button id="mainBtn" onclick="start()">🚀 立即生圖 (自動匹配正確 ID)</button>
     <div id="status">準備就緒</div>
-    
     <div class="grid">
         <div class="box"><b>1. 純白背景</b><img id="r1"><button id="d1" style="display:none" onclick="dl(1)">💾 下載</button></div>
         <div class="box"><b>2. 淺灰背景</b><img id="r2"><button id="d2" style="display:none" onclick="dl(2)">💾 下載</button></div>
@@ -40,7 +39,7 @@ async function start() {
     const file = document.getElementById('fileInput').files[0];
     const status = document.getElementById('status');
     const log = document.getElementById('log');
-    if(!key || !file) return alert("請填寫資料");
+    if(!key || !file) return alert("資料未齊");
 
     document.getElementById('mainBtn').disabled = true;
     log.style.display = "block";
@@ -60,35 +59,38 @@ async function start() {
             headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
             body: JSON.stringify({
                 model: "meta-llama/llama-3.2-11b-vision-instruct",
-                messages: [{ role: "user", content: [{ type: "text", text: "Material: Pearl, Moissanite, or Jade? One word." }, { type: "image_url", image_url: { url: b64 } }] }]
+                messages: [{ role: "user", content: [{ type: "text", text: "What material? One word: Moissanite, Pearl, Jade." }, { type: "image_url", image_url: { url: b64 } }] }]
             })
         });
         const data = await res.json();
         const mat = data.choices[0].message.content.trim().split(/\s+/)[0].replace(/[^a-zA-Z]/g, '');
         status.innerText = `✨ 材質: ${mat}。正在嘗試生圖...`;
 
-        // 2. 生圖循環 (多重保險)
+        // 2. 生圖函數：嘗試不同 ID 格式
         const gen = async (bg, id, btn) => {
-            // 嘗試模型列表：按穩定度排序
-            const models = [
-                "google/gemini-2.0-flash-001",
-                "openai/dall-e-3",
-                "black-forest-labs/flux-schnell",
-                "anthropic/claude-3.5-sonnet" // 有時 Claude 會直接給 URL
+            // 優先嘗試橫杠格式，再嘗試斜杠格式，最後嘗試 Google
+            const possibleModels = [
+                "black-forest-labs/flux-schnell", 
+                "black-forest-labs/flux/schnell",
+                "google/gemini-2.0-flash-001"
             ];
 
-            const prompt = `Professional jewelry photography, ${mat} pendant, silver chain, centered on ${bg} background, studio lighting, high resolution image URL.`;
+            const prompt = `Professional jewelry photography, ${mat} piece, silver, centered on ${bg} background, studio lighting. Return ONLY an image URL.`;
 
-            for (let modelId of models) {
+            for (let modelId of possibleModels) {
                 try {
-                    log.innerText += `\n嘗試使用引擎: ${modelId}`;
+                    log.innerText += `\n測試 ID: ${modelId}`;
                     const gRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                         method: "POST",
                         headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
                         body: JSON.stringify({ model: modelId, messages: [{ role: "user", content: prompt }] })
                     });
                     const gData = await gRes.json();
-                    if(gData.error) continue; // 呢個 model 唔得就試下一個
+                    
+                    if(gData.error) {
+                        log.innerText += ` -> 失敗: ${gData.error.message}`;
+                        continue; 
+                    }
 
                     const content = gData.choices[0].message.content;
                     const urlMatch = content.match(/https?:\/\/\S+/g);
@@ -97,21 +99,21 @@ async function start() {
                         document.getElementById(id).src = url;
                         document.getElementById(id).style.display = "block";
                         document.getElementById(btn).style.display = "block";
-                        log.innerText += `\n✅ ${modelId} 成功生成網址！`;
-                        return; // 成功即停
+                        log.innerText += `\n✅ 成功！使用引擎: ${modelId}`;
+                        return;
                     }
                 } catch (e) {
                     continue;
                 }
             }
-            throw new Error("試過所有模型都無法生成圖片網址，請檢查 API Key 餘額或 VPN。");
+            throw new Error("所有嘗試過的 Model ID 均無效，請檢查 API Key 餘額。");
         };
 
-        await Promise.all([ gen("pure white", "r1", "d1"), gen("light grey", "r2", "d2") ]);
+        await Promise.all([ gen("pure white", "r1", "d1"), gen("soft grey", "r2", "d2") ]);
         status.innerText = "🎉 生成完畢！";
     } catch (e) {
         status.innerText = "❌ 失敗";
-        log.innerText += "\n最終錯誤: " + e.message;
+        log.innerText += "\n錯誤詳情: " + e.message;
     } finally {
         document.getElementById('mainBtn').disabled = false;
     }
