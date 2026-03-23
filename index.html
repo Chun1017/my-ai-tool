@@ -2,25 +2,29 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 - 穩定修正版</title>
+    <title>珠寶 AI 攝影師 - 最終穩定版</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #f8f9fa; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fdfdfd; }
+        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #eee; }
         input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
         #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
-        #out { max-width: 100%; border-radius: 12px; display: none; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        img { max-width: 100%; border-radius: 12px; display: none; margin-top: 20px; border: 1px solid #eee; }
+        #debug { font-size: 11px; color: #999; margin-top: 15px; display: none; text-align: left; background: #f9f9f9; padding: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3>💎 珠寶 AI 專業攝影</h3>
+    <h3>💎 珠寶 AI 攝影師</h3>
+    <p style="font-size: 12px; color: #888;">強制穩定版 (需開 VPN)</p>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="file" id="file" accept="image/*">
     <button id="btn" onclick="start()">🚀 立即生成白底照片</button>
-    <div id="status">準備就緒 (請開 VPN)</div>
+    
+    <div id="status">準備就緒</div>
     <img id="out">
+    <div id="debug"></div>
 </div>
 
 <script>
@@ -29,13 +33,15 @@ async function start() {
     const file = document.getElementById('file').files[0];
     const status = document.getElementById('status');
     const out = document.getElementById('out');
+    const debug = document.getElementById('debug');
     const btn = document.getElementById('btn');
 
-    if(!key || !file) return alert("請填寫資料");
+    if(!key || !file) return alert("請填寫 Key 並選圖");
 
     btn.disabled = true;
     out.style.display = "none";
-    status.innerText = "⏳ 正在分析並連線美國伺服器...";
+    debug.style.display = "none";
+    status.innerText = "⏳ 正在分析材質 (美國中轉站)...";
 
     const b64 = await new Promise(r => {
         const f = new FileReader();
@@ -44,6 +50,7 @@ async function start() {
     });
 
     try {
+        // 第一步：叫 AI 分析呢件珠寶係乜
         const res = await fetch("/api/proxy", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -53,7 +60,7 @@ async function start() {
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Create a professional commercial jewelry photo. Use pollination style. Return ONLY the direct image URL on white background." },
+                        { type: "text", text: "Identify this jewelry. Return ONLY a 5-word English description of its appearance (e.g. 'Silver moissanite heart pendant necklace')." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -63,23 +70,21 @@ async function start() {
         const data = await res.json();
         
         if (data.choices && data.choices[0].message) {
-            const content = data.choices[0].message.content;
-            // 強化網址提取邏輯
-            const urlMatch = content.match(/https?:\/\/[^\s"'>)]+/g);
+            const description = data.choices[0].message.content.trim();
+            status.innerText = "🎨 辨識成功，正在繪圖...";
             
-            if (urlMatch) {
-                let finalUrl = urlMatch[0];
-                // 移除可能存在的末尾標點
-                finalUrl = finalUrl.replace(/[).,;]$/, "");
-                
-                out.src = finalUrl;
-                out.style.display = "block";
-                status.innerText = "🎉 生成成功！請等候圖片載入...";
-            } else {
-                status.innerText = "❌ 無法從 AI 回應中提取網址";
-            }
-        } else if (data.error) {
-            status.innerText = "❌ 錯誤：" + data.error.message;
+            // 第二步：直接用程式砌條生圖 URL，100% 避開 match 錯誤
+            const prompt = encodeURIComponent(`Professional commercial photo of ${description}, centered, pure white background, studio lighting, high resolution, 8k`);
+            const finalUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+
+            out.src = finalUrl;
+            out.style.display = "block";
+            status.innerText = "🎉 生成成功！圖片載入中...";
+            
+            debug.style.display = "block";
+            debug.innerText = "AI 辨識結果：" + description;
+        } else {
+            throw new Error(data.error ? data.error.message : "AI 冇反應");
         }
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
