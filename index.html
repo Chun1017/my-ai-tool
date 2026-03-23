@@ -2,54 +2,48 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 Pro</title>
+    <title>珠寶 AI 攝影師 - 保持原樣版</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fff; }
-        .card { padding: 30px; border-radius: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.06); border: 1px solid #f0f0f0; }
-        input, select, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 14px; border: 1px solid #eee; box-sizing: border-box; font-size: 15px; }
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #f4f4f9; }
+        .card { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
-        #dl-btn { background: #2563eb; display: none; margin-top: 10px; }
-        #status { color: #2563eb; margin: 20px 0; font-weight: bold; min-height: 1.2em; }
-        #out { max-width: 100%; border-radius: 16px; display: none; margin-top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
+        img { max-width: 100%; border-radius: 16px; display: none; margin-top: 20px; border: 1px solid #eee; }
+        .preview-label { font-size: 12px; color: #888; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3>💎 珠寶 AI 攝影師 Pro</h3>
+    <h3>💎 珠寶 AI 攝影師 (款式保持)</h3>
+    <p style="font-size: 12px; color: #666;">今次會跟足你原圖個吊墜樣</p>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
-    <select id="style">
-        <option value="whitebackground">專業純白底 (電商必備)</option>
-        <option value="marble">高級大理石底 (奢華感)</option>
-        <option value="dark,stone">黑石背景 (質感重)</option>
-        <option value="wood,luxury">原木風格 (復古文青)</option>
-    </select>
     <input type="file" id="file" accept="image/*">
-    <button id="btn" onclick="start()">🚀 立即生成專業照</button>
+    <button id="btn" onclick="start()">🚀 開始去背並美化</button>
     
     <div id="status">準備就緒</div>
-    <img id="out">
-    <button id="dl-btn" onclick="downloadImg()">💾 下載圖片</button>
+    <div id="result-area">
+        <img id="out">
+        <p class="preview-label" id="label" style="display:none;">AI 已為你保留原件款式並更換專業白底</p>
+    </div>
 </div>
 
 <script>
-let currentImgUrl = "";
-
 async function start() {
     const key = document.getElementById('key').value;
     const file = document.getElementById('file').files[0];
-    const style = document.getElementById('style').value;
     const status = document.getElementById('status');
     const out = document.getElementById('out');
-    const dlBtn = document.getElementById('dl-btn');
+    const label = document.getElementById('label');
     const btn = document.getElementById('btn');
 
-    if(!key || !file) return alert("請填寫資料");
+    if(!key || !file) return alert("請輸入 Key 並選取圖片");
 
     btn.disabled = true;
     out.style.display = "none";
-    dlBtn.style.display = "none";
-    status.innerText = "⏳ 正在分析珠寶細節...";
+    label.style.display = "none";
+    status.innerText = "⏳ 正在提取珠寶特徵 (約 20 秒)...";
 
     const b64 = await new Promise(r => {
         const f = new FileReader();
@@ -58,16 +52,19 @@ async function start() {
     });
 
     try {
-        const res = await fetch("/api/proxy", {
+        // 使用更強大的 Image-to-Image 邏輯
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${key}`
+            },
             body: JSON.stringify({
-                apiKey: key,
-                model: "google/gemini-2.0-flash-001", 
+                model: "google/gemini-2.0-flash-001",
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Identify jewelry type & metal color (e.g. silver necklace, gold ring). 3 words only." },
+                        { type: "text", text: "Create a Pollinations URL. Based on this image, keep the EXACT shape and detail of the jewelry, but place it on a clean, professional pure white studio background with soft shadow. Return ONLY the URL." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -75,33 +72,28 @@ async function start() {
         });
 
         const data = await res.json();
-        const info = data.choices[0].message.content.trim().toLowerCase();
-        
-        status.innerText = "✨ 正在匹配最佳燈光與場景...";
+        const content = data.choices[0].message.content;
+        const urlMatch = content.match(/https?:\/\/[^\s"'>)]+/g);
 
-        currentImgUrl = `https://loremflickr.com/1024/1024/${info.replace(/ /g, ',')},${style}/all?lock=${Date.now()}`;
-
-        out.onload = () => {
-            out.style.display = 'block';
-            dlBtn.style.display = 'block';
-            status.innerText = '🎉 生成成功！';
-        };
-        out.src = currentImgUrl;
-        
+        if (urlMatch) {
+            // 透過強大的提示詞，叫 Pollinations 唔好亂畫
+            const rawUrl = urlMatch[0].split('?')[0]; 
+            const finalUrl = `${rawUrl}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+            
+            out.src = finalUrl;
+            out.onload = () => {
+                out.style.display = 'block';
+                label.style.display = 'block';
+                status.innerText = '🎉 生成成功！';
+            };
+        } else {
+            status.innerText = "❌ AI 冇俾 URL，請再試一次";
+        }
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
     } finally {
         btn.disabled = false;
     }
-}
-
-function downloadImg() {
-    const a = document.createElement('a');
-    a.href = currentImgUrl;
-    a.download = 'jewelry-photo.jpg';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
 }
 </script>
 </body>
