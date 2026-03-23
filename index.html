@@ -2,13 +2,14 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 (Vercel 版)</title>
+    <title>珠寶 AI 攝影師 (中轉技術版)</title>
     <style>
         body { font-family: sans-serif; max-width: 500px; margin: 40px auto; text-align: center; }
         input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ddd; }
         button { background: #000; color: #fff; cursor: pointer; font-weight: bold; }
         #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
-        img { max-width: 100%; border-radius: 10px; display: none; margin-top: 20px; }
+        img { max-width: 100%; border-radius: 10px; display: none; margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #debug { font-size: 10px; color: #999; text-align: left; white-space: pre-wrap; display: none; }
     </style>
 </head>
 <body>
@@ -18,15 +19,20 @@
     <button id="btn" onclick="start()">🚀 立即生圖 (免 VPN 測試)</button>
     <div id="status">準備就緒</div>
     <img id="out">
+    <div id="debug" id="debug-box"></div>
 
     <script>
     async function start() {
         const key = document.getElementById('key').value;
         const file = document.getElementById('file').files[0];
         const status = document.getElementById('status');
+        const debug = document.getElementById('debug');
+        const out = document.getElementById('out');
         
         if(!key || !file) return alert("請填寫 Key 並選圖");
-        status.innerText = "⏳ 正在透過 Vercel 中轉請求...";
+        
+        status.innerText = "⏳ 正在處理中 (中轉伺服器已啟動)...";
+        out.style.display = "none";
 
         const b64 = await new Promise(r => {
             const f = new FileReader();
@@ -34,28 +40,37 @@
             f.readAsDataURL(file);
         });
 
-        // 關鍵改動：改為 call 我哋自己嘅 /api/proxy
         try {
             const res = await fetch("/api/proxy", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     apiKey: key,
-                    model: "openai/gpt-4o-mini",
+                    model: "google/gemini-2.0-flash-001", // 換一個生圖更直接的模型
                     messages: [{ role: "user", content: [
-                        { type: "text", text: "Generate a professional jewelry photo on pure white background. Return only URL." },
+                        { type: "text", text: "Create a professional commercial photo of this jewelry on a pure white background. Return ONLY the image URL." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]}]
                 })
             });
 
             const data = await res.json();
-            const content = data.choices[0].message.content;
-            const url = content.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
             
-            document.getElementById('out').src = url;
-            document.getElementById('out').style.display = "block";
-            status.innerText = "🎉 成功！";
+            if (data.error) throw new Error(data.error.message);
+
+            const content = data.choices[0].message.content;
+            const urlMatch = content.match(/https?:\/\/\S+/g);
+
+            if (urlMatch) {
+                const url = urlMatch[0].replace(/[")].*$/, "");
+                out.src = url;
+                out.style.display = "block";
+                status.innerText = "🎉 成功！";
+            } else {
+                status.innerText = "❌ AI 冇回傳網址，請再試一次";
+                debug.style.display = "block";
+                debug.innerText = "AI 回傳內容：" + content;
+            }
         } catch (e) {
             status.innerText = "❌ 失敗：" + e.message;
         }
