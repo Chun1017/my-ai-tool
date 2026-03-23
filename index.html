@@ -2,90 +2,121 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 - 最終修正版</title>
+    <title>珠寶 AI 攝影師 - 最終穩定版</title>
     <style>
         body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; }
-        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; background: #000; color: #fff; border: none; font-weight: bold; cursor: pointer; }
-        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
-        #image-container { margin-top: 20px; position: relative; min-height: 200px; display: none; }
-        img { max-width: 100%; border-radius: 12px; border: 1px solid #eee; }
-        .loader { font-size: 12px; color: #888; margin-bottom: 10px; }
+        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 1px solid #eee; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
+        button:disabled { background: #ccc; }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; min-height: 1.2em;}
+        #image-container { margin-top: 20px; display: none; }
+        img { max-width: 100%; border-radius: 12px; border: 1px solid #eee; display: block;}
+        .loader-text { font-size: 12px; color: #888; margin-bottom: 10px; display: none; }
+        #link-box { font-size: 12px; background: #eee; padding: 10px; border-radius: 8px; margin-top: 15px; word-break: break-all; text-align: left; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h3>💎 珠寶 AI 攝影師</h3>
-    <input type="password" id="key" placeholder="貼上 OpenRouter API Key" style="width:100%; padding:10px; margin-bottom:10px;">
-    <input type="file" id="file" accept="image/*" style="width:100%; margin-bottom:10px;">
-    <button id="btn" onclick="start()">🚀 立即生圖</button>
+    <p style="font-size: 12px; color: #888;">請確保開住 VPN (US/JP 最好)</p>
+    <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
+    <input type="file" id="file" accept="image/*">
+    <button id="btn" onclick="start()">🚀 立即生圖 (穩定引擎)</button>
     
-    <div id="status">準備就緒 (請開 VPN)</div>
+    <div id="status">準備就緒</div>
 
     <div id="image-container">
-        <div class="loader">正在從雲端下載圖片 (可能需時 10 秒)...</div>
-        <img id="out" onload="onImageLoad()" onerror="onImageError()">
+        <div class="loader-text">云端正在畫圖，請等候大約 15 秒...</div>
+        <img id="out" onload="onLoadSuccess()" onerror="onLoadError()">
+        <div id="link-box"><strong>手動開啟網址：</strong><br><a id="raw-link" href="#" target="_blank">點此打開圖片</a></div>
     </div>
 </div>
 
 <script>
-function onImageLoad() {
-    document.querySelector('.loader').style.display = 'none';
-    document.getElementById('status').innerText = "🎉 圖片載入成功！";
+const status = document.getElementById('status');
+const container = document.getElementById('image-container');
+const loaderText = document.querySelector('.loader-text');
+const out = document.getElementById('out');
+const linkBox = document.getElementById('link-box');
+const rawLink = document.getElementById('raw-link');
+const btn = document.getElementById('btn');
+
+function onLoadSuccess() {
+    loaderText.style.display = 'none';
+    status.innerText = "🎉 圖片載入成功！";
 }
 
-function onImageError() {
-    document.getElementById('status').innerText = "❌ 載入超時，請點擊下方連結手動查看";
+function onLoadError() {
+    loaderText.style.display = 'none';
+    status.innerText = "❌ 載入失敗 (通常是雲端未畫完)，請手動打開下方網址";
 }
 
 async function start() {
     const key = document.getElementById('key').value;
     const file = document.getElementById('file').files[0];
-    const status = document.getElementById('status');
-    const container = document.getElementById('image-container');
-    const out = document.getElementById('out');
 
-    if(!key || !file) return alert("請填寫資料");
+    if(!key || !file) return alert("請填寫 Key 並選圖");
 
-    status.innerText = "⏳ 正在分析圖片...";
-    container.style.display = "block";
+    btn.disabled = true;
     out.style.display = "none";
-    document.querySelector('.loader').style.display = 'block';
-
-    const b64 = await new Promise(r => {
-        const f = new FileReader();
-        f.onload = e => r(e.target.result);
-        f.readAsDataURL(file);
-    });
+    linkBox.style.display = "none";
+    container.style.display = "none";
+    status.innerText = "⏳ 正在啟動美國伺服器中轉請求...";
 
     try {
+        const b64 = await new Promise(r => {
+            const f = new FileReader();
+            f.onload = e => r(e.target.result);
+            f.readAsDataURL(file);
+        });
+
         const res = await fetch("/api/proxy", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 apiKey: key,
-                model: "google/gemini-2.0-flash-001",
-                messages: [{ role: "user", content: [
-                    { type: "text", text: "Return ONLY a pollination image URL for this jewelry on white background." },
-                    { type: "image_url", image_url: { url: b64 } }
-                ]}]
+                model: "google/gemini-2.0-flash-001", // Gemini 2.0 目前生圖最穩
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Professional commercial jewelry product photo, isolated centered on pure white background, 8k. Return ONLY a Pollinations image URL." },
+                        { type: "image_url", image_url: { url: b64 } }
+                    ]
+                }]
             })
         });
 
         const data = await res.json();
         const content = data.choices[0].message.content;
-        const urlMatch = content.match(/https?:\/\/\S+/g);
+        
+        // 更全面的網址捕獲
+        const urlMatch = content.match(/https?:\/\/[^\s"'>)]+/g);
 
         if (urlMatch) {
-            // 加一個隨機數防止瀏覽器讀取舊的爛圖快取
-            const finalUrl = urlMatch[0] + "&t=" + Date.now();
+            const finalUrl = urlMatch[0];
+            
+            // 顯示容器和手動連結
+            container.style.display = "block";
+            linkBox.style.display = "block";
+            rawLink.href = finalUrl;
+            rawLink.innerText = finalUrl.substring(0, 50) + "..."; // 縮短顯示網址
+
+            // 顯示圖片和緩衝文字
+            loaderText.style.display = "block";
             out.src = finalUrl;
             out.style.display = "block";
-            status.innerText = "⏳ 雲端畫圖中，請等候...";
+            status.innerText = "⏳ 正在從雲端下載圖片，請等候 15 秒...";
+
+        } else {
+            status.innerText = "❌ 錯誤：AI 未回傳網址";
+            // 可以印出 content 來 debug
         }
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
+    } finally {
+        btn.disabled = false;
     }
 }
 </script>
