@@ -2,98 +2,64 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 - 專用生圖版</title>
+    <title>珠寶 AI 攝影師 (Vercel 版)</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; border: 1px solid #eee; border-radius: 20px; }
-        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; }
-        button { background: #000; color: #fff; cursor: pointer; font-weight: bold; border: none; }
-        button:disabled { background: #ccc; }
-        #status { color: #2563eb; font-weight: bold; margin: 20px 0; min-height: 1.2em; }
-        img { max-width: 100%; border-radius: 10px; display: none; margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        #debug { font-size: 11px; color: red; text-align: left; background: #f9f9f9; padding: 10px; display: none; margin-top: 20px; white-space: pre-wrap; }
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; text-align: center; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ddd; }
+        button { background: #000; color: #fff; cursor: pointer; font-weight: bold; }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
+        img { max-width: 100%; border-radius: 10px; display: none; margin-top: 20px; }
     </style>
 </head>
 <body>
-
-    <h3>💎 珠寶 AI 攝影師</h3>
+    <h3>💎 珠寶 AI 攝影師 (中轉技術版)</h3>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
-    <input type="file" id="fileInput" accept="image/*">
-    <button id="btn" onclick="start()">🚀 立即生圖</button>
-    
-    <div id="status">準備就緒 (請開 VPN)</div>
+    <input type="file" id="file">
+    <button id="btn" onclick="start()">🚀 立即生圖 (免 VPN 測試)</button>
+    <div id="status">準備就緒</div>
     <img id="out">
-    <pre id="debug"></pre>
 
-<script>
-async function start() {
-    const key = document.getElementById('key').value;
-    const file = document.getElementById('fileInput').files[0];
-    const status = document.getElementById('status');
-    const debug = document.getElementById('debug');
-    const out = document.getElementById('out');
-    const btn = document.getElementById('btn');
+    <script>
+    async function start() {
+        const key = document.getElementById('key').value;
+        const file = document.getElementById('file').files[0];
+        const status = document.getElementById('status');
+        
+        if(!key || !file) return alert("請填寫 Key 並選圖");
+        status.innerText = "⏳ 正在透過 Vercel 中轉請求...";
 
-    if(!key || !file) return alert("請輸入 Key 並選圖");
-
-    btn.disabled = true;
-    out.style.display = "none";
-    debug.style.display = "none";
-    status.innerText = "⏳ 正在分析圖片中...";
-
-    try {
         const b64 = await new Promise(r => {
             const f = new FileReader();
             f.onload = e => r(e.target.result);
             f.readAsDataURL(file);
         });
 
-        // 步驟 1: 搵 Llama 幫手寫一個「生圖專用 Prompt」
-        status.innerText = "⏳ 步驟 1/2: 提取珠寶特徵...";
-        const descRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: "meta-llama/llama-3.2-11b-vision-instruct",
-                messages: [{ role: "user", content: [{ type: "text", text: "Describe this jewelry piece in 10 words for an AI image generator." }, { type: "image_url", image_url: { url: b64 } }] }]
-            })
-        });
-        const descData = await descRes.json();
-        const jewelryDesc = descData.choices[0].message.content;
+        // 關鍵改動：改為 call 我哋自己嘅 /api/proxy
+        try {
+            const res = await fetch("/api/proxy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    apiKey: key,
+                    model: "openai/gpt-4o-mini",
+                    messages: [{ role: "user", content: [
+                        { type: "text", text: "Generate a professional jewelry photo on pure white background. Return only URL." },
+                        { type: "image_url", image_url: { url: b64 } }
+                    ]}]
+                })
+            });
 
-        // 步驟 2: 用專門生圖的模型 (ID 絕對正確版)
-        status.innerText = "⏳ 步驟 2/2: 正在生成高品質圖片 (DALL-E 3)...";
-        const genRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: "openai/dall-e-3", // 呢個係專門生圖嘅 ID
-                messages: [{ role: "user", content: `A professional commercial photo of ${jewelryDesc}, centered on a pure white background, studio lighting, 8k resolution.` }]
-            })
-        });
-
-        const genData = await genRes.json();
-        if(genData.error) throw new Error(genData.error.message);
-
-        const content = genData.choices[0].message.content;
-        const urlMatch = content.match(/https?:\/\/\S+/g);
-
-        if(urlMatch) {
-            out.src = urlMatch[0].replace(/[")].*$/, "");
-            out.style.display = "block";
-            status.innerText = "🎉 生成成功！";
-        } else {
-            // 如果 DALL-E 3 回傳咗文字但冇網址，通常係因為 OpenRouter 路由問題
-            throw new Error("模型未回傳網址，請確認 API Key 餘額。回傳內容：" + content);
+            const data = await res.json();
+            const content = data.choices[0].message.content;
+            const url = content.match(/https?:\/\/\S+/g)[0].replace(/[")].*$/, "");
+            
+            document.getElementById('out').src = url;
+            document.getElementById('out').style.display = "block";
+            status.innerText = "🎉 成功！";
+        } catch (e) {
+            status.innerText = "❌ 失敗：" + e.message;
         }
-
-    } catch (e) {
-        status.innerText = "❌ 失敗";
-        debug.innerText = e.message;
-        debug.style.display = "block";
-    } finally {
-        btn.disabled = false;
     }
-}
-</script>
+    </script>
 </body>
 </html>
