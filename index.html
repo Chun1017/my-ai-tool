@@ -2,29 +2,35 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 (終極修復版)</title>
+    <title>珠寶 AI 攝影師 - 終極顯示版</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fafafa; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
-        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; transition: 0.3s; }
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fdfdfd; }
+        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #eee; }
+        input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
         button:disabled { background: #ccc; }
-        #status { color: #2563eb; margin: 20px 0; font-weight: bold; min-height: 1.2em; }
-        img { max-width: 100%; border-radius: 12px; display: none; margin-top: 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
-        #debug { font-size: 11px; color: #666; background: #eee; padding: 10px; border-radius: 8px; margin-top: 20px; text-align: left; display: none; overflow-x: auto; }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
+        img { max-width: 100%; border-radius: 12px; display: none; margin-top: 20px; border: 1px solid #eee; }
+        #link-box { margin-top: 20px; padding: 10px; background: #f0f0f0; border-radius: 8px; font-size: 12px; word-break: break-all; display: none; text-align: left; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h3>💎 珠寶 AI 攝影師</h3>
+    <p style="font-size: 12px; color: #888;">請確保已開 VPN (US/JP/TW)</p>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="file" id="file" accept="image/*">
-    <button id="btn" onclick="start()">🚀 立即生圖 (免 VPN)</button>
+    <button id="btn" onclick="start()">🚀 立即生圖</button>
     
     <div id="status">準備就緒</div>
+    
+    <div id="link-box">
+        <strong>圖片連結 (如無法顯示請手動開啟)：</strong><br>
+        <a id="raw-link" href="#" target="_blank">點此打開圖片</a>
+    </div>
+
     <img id="out">
-    <pre id="debug"></pre>
 </div>
 
 <script>
@@ -32,16 +38,17 @@ async function start() {
     const key = document.getElementById('key').value;
     const fileInput = document.getElementById('file');
     const status = document.getElementById('status');
-    const debug = document.getElementById('debug');
     const out = document.getElementById('out');
+    const linkBox = document.getElementById('link-box');
+    const rawLink = document.getElementById('raw-link');
     const btn = document.getElementById('btn');
 
     if(!key || !fileInput.files[0]) return alert("請輸入 Key 並選圖");
 
     btn.disabled = true;
     out.style.display = "none";
-    debug.style.display = "none";
-    status.innerText = "⏳ 正在啟動美國中轉伺服器...";
+    linkBox.style.display = "none";
+    status.innerText = "⏳ 正在處理 (美國伺服器中轉中)...";
 
     try {
         const b64 = await new Promise(r => {
@@ -50,63 +57,46 @@ async function start() {
             f.readAsDataURL(fileInput.files[0]);
         });
 
-        // 嘗試列表：如果第一個唔得就試第二個
-        const models = [
-            "google/gemini-2.0-flash-001",
-            "openai/gpt-4o-mini",
-            "anthropic/claude-3.5-sonnet"
-        ];
+        const res = await fetch("/api/proxy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                apiKey: key,
+                model: "google/gemini-2.0-flash-001", // 暫定用呢個，唔得再試
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Create a commercial product shot of this jewelry on pure white background. Return only the image URL." },
+                        { type: "image_url", image_url: { url: b64 } }
+                    ]
+                }]
+            })
+        });
 
-        let success = false;
-        let lastError = "";
+        const data = await res.json();
+        const content = data.choices[0].message.content;
+        
+        // 增強型網址抓取：支持更多格式
+        const urlMatch = content.match(/https?:\/\/[^\s"'>)]+/g);
 
-        for (const modelId of models) {
-            try {
-                status.innerText = `⏳ 正在嘗試引擎: ${modelId.split('/')[1]}...`;
-                
-                const res = await fetch("/api/proxy", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        apiKey: key,
-                        model: modelId,
-                        messages: [{
-                            role: "user",
-                            content: [
-                                { type: "text", text: "Professional jewelry product shot, pure white background, 8k. Return ONLY the image URL." },
-                                { type: "image_url", image_url: { url: b64 } }
-                            ]
-                        }]
-                    })
-                });
-
-                const data = await res.json();
-                if (data.error) throw new Error(data.error.message);
-
-                const content = data.choices[0].message.content;
-                const urlMatch = content.match(/https?:\/\/[^\s"'>)]+/g);
-
-                if (urlMatch) {
-                    out.src = urlMatch[0];
-                    out.style.display = "block";
-                    status.innerText = "🎉 生成成功！";
-                    success = true;
-                    break; // 成功就跳出迴圈
-                } else {
-                    lastError = "AI 回傳咗內容但搵唔到網址";
-                }
-            } catch (e) {
-                lastError = e.message;
-                continue; // 失敗就試下一個
-            }
+        if (urlMatch) {
+            const url = urlMatch[0];
+            status.innerText = "🎉 生成完畢！";
+            
+            // 顯示連結盒
+            linkBox.style.display = "block";
+            rawLink.href = url;
+            rawLink.innerText = url;
+            
+            // 顯示圖片
+            out.src = url;
+            out.style.display = "block";
+        } else {
+            status.innerText = "❌ AI 回傳咗內容但搵唔到網址：" + content.substring(0, 50);
         }
 
-        if (!success) throw new Error(lastError || "所有模型都失敗咗");
-
     } catch (e) {
-        status.innerText = "❌ 失敗";
-        debug.style.display = "block";
-        debug.innerText = "錯誤詳情: " + e.message;
+        status.innerText = "❌ 失敗：" + e.message;
     } finally {
         btn.disabled = false;
     }
