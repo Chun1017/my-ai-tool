@@ -2,79 +2,115 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 (中轉技術版)</title>
+    <title>珠寶 AI 攝影師 (終極修復版)</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; text-align: center; }
-        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ddd; }
-        button { background: #000; color: #fff; cursor: pointer; font-weight: bold; }
-        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
-        img { max-width: 100%; border-radius: 10px; display: none; margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        #debug { font-size: 10px; color: #999; text-align: left; white-space: pre-wrap; display: none; }
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fafafa; }
+        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; transition: 0.3s; }
+        button:disabled { background: #ccc; }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; min-height: 1.2em; }
+        img { max-width: 100%; border-radius: 12px; display: none; margin-top: 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        #debug { font-size: 11px; color: #666; background: #eee; padding: 10px; border-radius: 8px; margin-top: 20px; text-align: left; display: none; overflow-x: auto; }
     </style>
 </head>
 <body>
-    <h3>💎 珠寶 AI 攝影師 (中轉技術版)</h3>
+
+<div class="card">
+    <h3>💎 珠寶 AI 攝影師</h3>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
-    <input type="file" id="file">
-    <button id="btn" onclick="start()">🚀 立即生圖 (免 VPN 測試)</button>
+    <input type="file" id="file" accept="image/*">
+    <button id="btn" onclick="start()">🚀 立即生圖 (免 VPN)</button>
+    
     <div id="status">準備就緒</div>
     <img id="out">
-    <div id="debug" id="debug-box"></div>
+    <pre id="debug"></pre>
+</div>
 
-    <script>
-    async function start() {
-        const key = document.getElementById('key').value;
-        const file = document.getElementById('file').files[0];
-        const status = document.getElementById('status');
-        const debug = document.getElementById('debug');
-        const out = document.getElementById('out');
-        
-        if(!key || !file) return alert("請填寫 Key 並選圖");
-        
-        status.innerText = "⏳ 正在處理中 (中轉伺服器已啟動)...";
-        out.style.display = "none";
+<script>
+async function start() {
+    const key = document.getElementById('key').value;
+    const fileInput = document.getElementById('file');
+    const status = document.getElementById('status');
+    const debug = document.getElementById('debug');
+    const out = document.getElementById('out');
+    const btn = document.getElementById('btn');
 
+    if(!key || !fileInput.files[0]) return alert("請輸入 Key 並選圖");
+
+    btn.disabled = true;
+    out.style.display = "none";
+    debug.style.display = "none";
+    status.innerText = "⏳ 正在啟動美國中轉伺服器...";
+
+    try {
         const b64 = await new Promise(r => {
             const f = new FileReader();
             f.onload = e => r(e.target.result);
-            f.readAsDataURL(file);
+            f.readAsDataURL(fileInput.files[0]);
         });
 
-        try {
-            const res = await fetch("/api/proxy", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    apiKey: key,
-                    model: "google/gemini-2.0-flash-001", // 換一個生圖更直接的模型
-                    messages: [{ role: "user", content: [
-                        { type: "text", text: "Create a professional commercial photo of this jewelry on a pure white background. Return ONLY the image URL." },
-                        { type: "image_url", image_url: { url: b64 } }
-                    ]}]
-                })
-            });
+        // 嘗試列表：如果第一個唔得就試第二個
+        const models = [
+            "google/gemini-2.0-flash-001",
+            "openai/gpt-4o-mini",
+            "anthropic/claude-3.5-sonnet"
+        ];
 
-            const data = await res.json();
-            
-            if (data.error) throw new Error(data.error.message);
+        let success = false;
+        let lastError = "";
 
-            const content = data.choices[0].message.content;
-            const urlMatch = content.match(/https?:\/\/\S+/g);
+        for (const modelId of models) {
+            try {
+                status.innerText = `⏳ 正在嘗試引擎: ${modelId.split('/')[1]}...`;
+                
+                const res = await fetch("/api/proxy", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        apiKey: key,
+                        model: modelId,
+                        messages: [{
+                            role: "user",
+                            content: [
+                                { type: "text", text: "Professional jewelry product shot, pure white background, 8k. Return ONLY the image URL." },
+                                { type: "image_url", image_url: { url: b64 } }
+                            ]
+                        }]
+                    })
+                });
 
-            if (urlMatch) {
-                const url = urlMatch[0].replace(/[")].*$/, "");
-                out.src = url;
-                out.style.display = "block";
-                status.innerText = "🎉 成功！";
-            } else {
-                status.innerText = "❌ AI 冇回傳網址，請再試一次";
-                debug.style.display = "block";
-                debug.innerText = "AI 回傳內容：" + content;
+                const data = await res.json();
+                if (data.error) throw new Error(data.error.message);
+
+                const content = data.choices[0].message.content;
+                const urlMatch = content.match(/https?:\/\/[^\s"'>)]+/g);
+
+                if (urlMatch) {
+                    out.src = urlMatch[0];
+                    out.style.display = "block";
+                    status.innerText = "🎉 生成成功！";
+                    success = true;
+                    break; // 成功就跳出迴圈
+                } else {
+                    lastError = "AI 回傳咗內容但搵唔到網址";
+                }
+            } catch (e) {
+                lastError = e.message;
+                continue; // 失敗就試下一個
             }
-        } catch (e) {
-            status.innerText = "❌ 失敗：" + e.message;
         }
+
+        if (!success) throw new Error(lastError || "所有模型都失敗咗");
+
+    } catch (e) {
+        status.innerText = "❌ 失敗";
+        debug.style.display = "block";
+        debug.innerText = "錯誤詳情: " + e.message;
+    } finally {
+        btn.disabled = false;
     }
-    </script>
+}
+</script>
 </body>
 </html>
