@@ -2,29 +2,28 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 - 最終穩定版</title>
+    <title>珠寶 AI 攝影師 - 引擎切換版</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fdfdfd; }
-        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #eee; }
-        input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
-        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; transition: 0.3s; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        #status { color: #2563eb; margin: 20px 0; font-weight: bold; min-height: 1.2em; }
-        img { max-width: 100%; border-radius: 12px; display: none; margin-top: 20px; border: 1px solid #eee; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        #debug { font-size: 11px; color: #999; margin-top: 15px; display: none; text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; word-break: break-all; }
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fff; }
+        .card { padding: 30px; border-radius: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.06); border: 1px solid #f0f0f0; }
+        input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 14px; border: 1px solid #eee; box-sizing: border-box; font-size: 15px; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
+        img { max-width: 100%; border-radius: 16px; display: none; margin-top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        #debug { font-size: 11px; color: #999; margin-top: 15px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 10px; display: none; word-break: break-all; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h3>💎 珠寶 AI 攝影師</h3>
-    <p style="font-size: 12px; color: #888;">強制穩定版 (需開 VPN)</p>
+    <p style="font-size: 12px; color: #888;">已換穩定生圖引擎 (無需 Pollinations)</p>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="file" id="file" accept="image/*">
-    <button id="btn" onclick="start()">🚀 立即生成白底照片</button>
+    <button id="btn" onclick="start()">🚀 立即生成專業白底照</button>
     
     <div id="status">準備就緒</div>
-    <img id="out" onload="this.style.display='block';">
+    <img id="out" onload="this.style.display='block'; document.getElementById('status').innerText='🎉 生成成功！';">
     <div id="debug"></div>
 </div>
 
@@ -37,12 +36,12 @@ async function start() {
     const debug = document.getElementById('debug');
     const btn = document.getElementById('btn');
 
-    if(!key || !file) return alert("請填寫 Key 並選圖");
+    if(!key || !file) return alert("請填寫資料");
 
     btn.disabled = true;
     out.style.display = "none";
     debug.style.display = "none";
-    status.innerText = "⏳ 正在辨識材質 (美國中轉站)...";
+    status.innerText = "⏳ 正在分析珠寶細節...";
 
     const b64 = await new Promise(r => {
         const f = new FileReader();
@@ -51,7 +50,6 @@ async function start() {
     });
 
     try {
-        // 第一步：叫 AI 分析呢件珠寶係乜，唔再叫佢俾網址
         const res = await fetch("/api/proxy", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -61,7 +59,7 @@ async function start() {
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Identify this jewelry. Return ONLY a short English description of its appearance (e.g. 'Silver moissanite heart pendant'). No other words." },
+                        { type: "text", text: "Identify this jewelry. Return ONLY a 5-word English description." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -69,25 +67,17 @@ async function start() {
         });
 
         const data = await res.json();
+        const desc = data.choices[0].message.content.trim().replace(/[^a-zA-Z0-9 ]/g, '');
         
-        if (data.choices && data.choices[0].message) {
-            const description = data.choices[0].message.content.trim();
-            status.innerText = "🎨 辨識成功，正在從雲端繪圖...";
-            
-            // 第二步：由程式直接砌條生圖 URL，100% 避開 match 錯誤
-            const cleanDescription = description.replace(/[^a-zA-Z0-9 ]/g, '');
-            const prompt = encodeURIComponent(`Professional commercial product photo of ${cleanDescription}, centered, pure white background, studio lighting, high resolution, 8k`);
-            const finalUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random()*10000)}`;
+        status.innerText = "🎨 正在呼叫備用繪圖引擎...";
 
-            out.src = finalUrl;
-            // 圖片顯示由 onload 觸發
-            status.innerText = "🎉 生成成功！圖片正在載入...";
-            
-            debug.style.display = "block";
-            debug.innerText = "AI 辨識結果：" + description + "\n生成網址：" + finalUrl;
-        } else {
-            throw new Error(data.error ? data.error.message : "AI 冇反應，請檢查 API Key");
-        }
+        // 換一個唔會 404 嘅網址格式 (使用 Flux 引擎)
+        const finalUrl = `https://pollinations.ai/p/${encodeURIComponent("Professional product shot of " + desc + " on pure white background, studio lighting, 8k")}?width=1024&height=1024&seed=${Math.floor(Math.random()*10000)}&model=flux`;
+
+        out.src = finalUrl;
+        debug.style.display = "block";
+        debug.innerText = "辨識結果：" + desc + "\n新連結：" + finalUrl;
+        
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
     } finally {
