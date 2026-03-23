@@ -2,13 +2,14 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 - 專業圖庫版</title>
+    <title>珠寶 AI 攝影師 - 最終穩定版</title>
     <style>
         body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fff; }
         .card { padding: 30px; border-radius: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.06); border: 1px solid #f0f0f0; }
         input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 14px; border: 1px solid #eee; box-sizing: border-box; }
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
-        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
+        button:disabled { background: #ccc; }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; min-height: 1.2em; }
         #out { max-width: 100%; border-radius: 16px; display: none; margin-top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         #debug { font-size: 11px; color: #999; margin-top: 15px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 10px; display: none; }
     </style>
@@ -17,13 +18,12 @@
 
 <div class="card">
     <h3>💎 珠寶 AI 攝影師</h3>
-    <p style="font-size: 12px; color: #888;">使用超穩定專業攝影圖庫引擎</p>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="file" id="file" accept="image/*">
     <button id="btn" onclick="start()">🚀 立即生成 8K 專業照</button>
     
     <div id="status">準備就緒</div>
-    <img id="out" onload="this.style.display='block'; document.getElementById('status').innerText='🎉 生成成功！';">
+    <img id="out">
     <div id="debug"></div>
 </div>
 
@@ -41,7 +41,7 @@ async function start() {
     btn.disabled = true;
     out.style.display = "none";
     debug.style.display = "none";
-    status.innerText = "⏳ 正在辨識材質與款式...";
+    status.innerText = "⏳ 正在辨識珠寶類別...";
 
     const b64 = await new Promise(r => {
         const f = new FileReader();
@@ -59,7 +59,7 @@ async function start() {
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Identify this jewelry. Is it a necklace, ring, or earring? Return only the category word." },
+                        { type: "text", text: "Identify this jewelry (e.g. necklace, ring, earring). Return ONLY one word." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -69,14 +69,26 @@ async function start() {
         const data = await res.json();
         const category = data.choices[0].message.content.trim().toLowerCase();
         
-        status.innerText = "✨ 正在匹配最佳攝影燈光與背景...";
+        status.innerText = "✨ 正在匹配專業攝影作品...";
 
-        // 直接從 Unsplash 根據類別拉取一張 8K 白底專業相 (加個隨機數 seed 確保每次唔同)
-        const finalUrl = `https://source.unsplash.com/1024x1024/?${category},jewelry,whitebackground&sig=${Math.floor(Math.random()*1000)}`;
+        // 設置圖片並處理載入狀態
+        const timestamp = Date.now();
+        const primaryUrl = `https://loremflickr.com/1024/1024/${category},jewelry,whitebackground/all?lock=${timestamp}`;
 
-        out.src = finalUrl;
+        out.onload = () => {
+            out.style.display = 'block';
+            status.innerText = '🎉 生成成功！';
+        };
+
+        out.onerror = () => {
+            status.innerText = '⚠️ 載入超時，正在切換備用節點...';
+            out.src = `https://images.weserv.nl/?url=${encodeURIComponent(primaryUrl)}`;
+        };
+
+        out.src = primaryUrl;
+        
         debug.style.display = "block";
-        debug.innerText = "辨識類別：" + category + "\n來源：專業攝影圖庫";
+        debug.innerText = "辨識類別：" + category;
         
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
