@@ -2,9 +2,9 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 - 專業生圖版</title>
+    <title>珠寶 AI 攝影師 - 穩定修正版</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #f4f7f6; }
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #f8f9fa; }
         .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
@@ -16,11 +16,10 @@
 
 <div class="card">
     <h3>💎 珠寶 AI 專業攝影</h3>
-    <p style="font-size: 12px; color: #888;">使用 Flux 頂級引擎 (需開 VPN)</p>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="file" id="file" accept="image/*">
-    <button id="btn" onclick="start()">🚀 立即生成專業照片</button>
-    <div id="status">準備就緒</div>
+    <button id="btn" onclick="start()">🚀 立即生成白底照片</button>
+    <div id="status">準備就緒 (請開 VPN)</div>
     <img id="out">
 </div>
 
@@ -32,11 +31,11 @@ async function start() {
     const out = document.getElementById('out');
     const btn = document.getElementById('btn');
 
-    if(!key || !file) return alert("請填寫 Key 並選圖");
+    if(!key || !file) return alert("請填寫資料");
 
     btn.disabled = true;
     out.style.display = "none";
-    status.innerText = "⏳ 正在分析材質並生成 (約需 20 秒)...";
+    status.innerText = "⏳ 正在分析並連線美國伺服器...";
 
     const b64 = await new Promise(r => {
         const f = new FileReader();
@@ -50,12 +49,11 @@ async function start() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 apiKey: key,
-                // 強制使用 black-forest-labs/flux-schnell 呢個最強生圖模型
-                model: "black-forest-labs/flux-schnell", 
+                model: "google/gemini-2.0-flash-001", 
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "A professional commercial product photo of this jewelry, highly detailed, centered on a pure white background, studio lighting, 8k resolution." },
+                        { type: "text", text: "Create a professional commercial jewelry photo. Use pollination style. Return ONLY the direct image URL on white background." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -64,20 +62,24 @@ async function start() {
 
         const data = await res.json();
         
-        // 檢查 OpenRouter 是否有回傳正確的圖片內容
-        if (data.choices && data.choices[0].message.content) {
+        if (data.choices && data.choices[0].message) {
             const content = data.choices[0].message.content;
+            // 強化網址提取邏輯
             const urlMatch = content.match(/https?:\/\/[^\s"'>)]+/g);
             
             if (urlMatch) {
-                out.src = urlMatch[0];
+                let finalUrl = urlMatch[0];
+                // 移除可能存在的末尾標點
+                finalUrl = finalUrl.replace(/[).,;]$/, "");
+                
+                out.src = finalUrl;
                 out.style.display = "block";
-                status.innerText = "🎉 生成成功！";
+                status.innerText = "🎉 生成成功！請等候圖片載入...";
             } else {
-                status.innerText = "❌ AI 冇俾網址，請再試一次";
+                status.innerText = "❌ 無法從 AI 回應中提取網址";
             }
         } else if (data.error) {
-            throw new Error(data.error.message);
+            status.innerText = "❌ 錯誤：" + data.error.message;
         }
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
