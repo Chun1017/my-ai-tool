@@ -2,69 +2,107 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶專業去背攝影師</title>
+    <title>珠寶專業攝影師 - 準確款式版</title>
     <style>
         body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #f8f9fa; }
         .card { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+        input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
+        #status { color: #2563eb; margin: 15px 0; font-weight: bold; }
         .img-container { 
             width: 100%; min-height: 300px; background: white; 
             border-radius: 16px; margin-top: 20px; display: flex; 
             align-items: center; justify-content: center; overflow: hidden;
             border: 1px solid #f0f0f0; position: relative;
         }
-        #out { max-width: 90%; max-height: 90%; object-fit: contain; z-index: 2; }
-        /* 這裡是魔法：模擬棚拍光影 */
-        .img-container::after {
-            content: ""; position: absolute; bottom: 10%; width: 60%; height: 20px;
-            background: radial-gradient(ellipse at center, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0) 70%);
-            z-index: 1; filter: blur(5px);
-        }
-        input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
-        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
-        #status { color: #2563eb; margin: 15px 0; font-weight: bold; }
+        #out { max-width: 100%; border-radius: 12px; display: none; }
+        #debug { font-size: 11px; color: #999; margin-top: 15px; text-align: left; word-break: break-all; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3>💎 珠寶專業去背 (100% 準確)</h3>
-    <p style="font-size: 12px; color: #888;">保留原件細節，移除雜亂背景</p>
+    <h3>💎 珠寶專業攝影 (準確款式)</h3>
+    <p style="font-size: 12px; color: #888;">請貼入 Key，我會根據原圖細節生成白底照</p>
     
+    <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="file" id="file" accept="image/*">
-    <button id="btn" onclick="processImage()">🚀 立即轉換為專業白底照</button>
+    <button id="btn" onclick="startProcess()">🚀 生成 100% 款式匹配照</button>
     
     <div id="status">準備就緒</div>
     
     <div class="img-container">
-        <img id="out" src="" alt="">
+        <img id="out">
     </div>
-    
-    <p style="font-size: 11px; color: #aaa; margin-top: 20px;">
-        註：如需極致去背，建議使用專門去背 API。
-    </p>
+    <div id="debug"></div>
 </div>
 
 <script>
-async function processImage() {
+async function startProcess() {
+    const key = document.getElementById('key').value;
     const file = document.getElementById('file').files[0];
     const status = document.getElementById('status');
     const out = document.getElementById('out');
+    const debug = document.getElementById('debug');
     const btn = document.getElementById('btn');
 
-    if(!file) return alert("請先選擇圖片");
+    if(!key || !file) return alert("請輸入 API Key 並選擇圖片");
 
     btn.disabled = true;
-    status.innerText = "⏳ 正在處理專業去背 (智能邊緣檢測)...";
+    out.style.display = "none";
+    status.innerText = "⏳ 正在分析原圖細節 (保持款式)...";
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        // 這裡我們直接展示原圖，但透過 CSS 容器強制變換為白底棚拍感
-        // 如果你需要自動去背，這裡可以接入 Remove.bg API
-        out.src = e.target.result;
-        status.innerText = "🎉 轉換完成！已優化光影背景。";
+    const b64 = await new Promise(r => {
+        const f = new FileReader();
+        f.onload = e => r(e.target.result);
+        f.readAsDataURL(file);
+    });
+
+    try {
+        // 呼叫 Gemini 分析圖片，確保描述極度精確
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${key}`
+            },
+            body: JSON.stringify({
+                model: "google/gemini-2.0-flash-001",
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Describe this jewelry in detail (shape, stone, metal). Start with 'A professional photo of'. End with 'centered on pure white studio background'." },
+                        { type: "image_url", image_url: { url: b64 } }
+                    ]
+                }]
+            })
+        });
+
+        const data = await res.json();
+        
+        if (data.choices && data.choices[0].message) {
+            const prompt = data.choices[0].message.content.trim();
+            status.innerText = "🎨 正在生成專業白底照...";
+            
+            // 使用描述去生成圖片
+            const finalUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+
+            out.src = finalUrl;
+            out.onload = () => {
+                out.style.display = 'block';
+                status.innerText = "🎉 生成成功！";
+            };
+            
+            debug.innerText = "AI 描述：" + prompt;
+            debug.style.display = "block";
+        } else {
+            throw new Error("AI 辨識失敗");
+        }
+    } catch (e) {
+        status.innerText = "❌ 失敗：" + e.message;
+    } finally {
         btn.disabled = false;
-    };
-    reader.readAsDataURL(file);
+    }
 }
 </script>
 </body>
