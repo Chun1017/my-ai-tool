@@ -2,43 +2,32 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶專業攝影師 - 準確款式版</title>
+    <title>珠寶專業攝影 - 極速版</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #f8f9fa; }
-        .card { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
-        input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fff; }
+        .card { padding: 30px; border-radius: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.06); border: 1px solid #f0f0f0; }
+        input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 14px; border: 1px solid #eee; box-sizing: border-box; }
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
-        #status { color: #2563eb; margin: 15px 0; font-weight: bold; }
-        .img-container { 
-            width: 100%; min-height: 300px; background: white; 
-            border-radius: 16px; margin-top: 20px; display: flex; 
-            align-items: center; justify-content: center; overflow: hidden;
-            border: 1px solid #f0f0f0; position: relative;
-        }
-        #out { max-width: 100%; border-radius: 12px; display: none; }
-        #debug { font-size: 11px; color: #999; margin-top: 15px; text-align: left; word-break: break-all; display: none; }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
+        #out { max-width: 100%; border-radius: 16px; display: none; margin-top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        #debug { font-size: 11px; color: #999; margin-top: 15px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 10px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3>💎 珠寶專業攝影 (準確款式)</h3>
-    <p style="font-size: 12px; color: #888;">請貼入 Key，我會根據原圖細節生成白底照</p>
-    
+    <h3>💎 珠寶專業攝影 (極速穩定版)</h3>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="file" id="file" accept="image/*">
-    <button id="btn" onclick="startProcess()">🚀 生成 100% 款式匹配照</button>
+    <button id="btn" onclick="start()">🚀 立即生成 (跟足款式)</button>
     
     <div id="status">準備就緒</div>
-    
-    <div class="img-container">
-        <img id="out">
-    </div>
+    <img id="out">
     <div id="debug"></div>
 </div>
 
 <script>
-async function startProcess() {
+async function start() {
     const key = document.getElementById('key').value;
     const file = document.getElementById('file').files[0];
     const status = document.getElementById('status');
@@ -46,11 +35,12 @@ async function startProcess() {
     const debug = document.getElementById('debug');
     const btn = document.getElementById('btn');
 
-    if(!key || !file) return alert("請輸入 API Key 並選擇圖片");
+    if(!key || !file) return alert("請填寫資料");
 
     btn.disabled = true;
     out.style.display = "none";
-    status.innerText = "⏳ 正在分析原圖細節 (保持款式)...";
+    debug.style.display = "none";
+    status.innerText = "⏳ 正在分析細節...";
 
     const b64 = await new Promise(r => {
         const f = new FileReader();
@@ -59,19 +49,15 @@ async function startProcess() {
     });
 
     try {
-        // 呼叫 Gemini 分析圖片，確保描述極度精確
         const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${key}`
-            },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
             body: JSON.stringify({
-                model: "google/gemini-2.0-flash-001",
+                model: "google/gemini-2.0-flash-001", 
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Describe this jewelry in detail (shape, stone, metal). Start with 'A professional photo of'. End with 'centered on pure white studio background'." },
+                        { type: "text", text: "Identify this jewelry. Provide a 15-word max English description of its exact shape and color for image generation. No fluff." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -79,25 +65,32 @@ async function startProcess() {
         });
 
         const data = await res.json();
+        const desc = data.choices[0].message.content.trim();
         
-        if (data.choices && data.choices[0].message) {
-            const prompt = data.choices[0].message.content.trim();
-            status.innerText = "🎨 正在生成專業白底照...";
-            
-            // 使用描述去生成圖片
-            const finalUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+        status.innerText = "🎨 正在繪製圖片 (通常 5-10 秒)...";
 
-            out.src = finalUrl;
-            out.onload = () => {
-                out.style.display = 'block';
-                status.innerText = "🎉 生成成功！";
-            };
-            
-            debug.innerText = "AI 描述：" + prompt;
-            debug.style.display = "block";
-        } else {
-            throw new Error("AI 辨識失敗");
-        }
+        // 精簡後的 Prompt
+        const promptText = `Professional product photo of ${desc}, centered on pure white background, studio lighting, high quality, 8k`;
+        const finalUrl = `https://pollinations.ai/p/${encodeURIComponent(promptText)}?width=1024&height=1024&seed=${Math.floor(Math.random()*999)}&model=flux`;
+
+        // 監聽圖片載入
+        out.onload = () => {
+            out.style.display = 'block';
+            status.innerText = "🎉 生成成功！";
+        };
+
+        // 如果 15 秒都出唔到，嘗試換一個種子值重試
+        setTimeout(() => {
+            if (out.style.display === "none") {
+                status.innerText = "⚠️ 伺服器反應慢，正在重新連接...";
+                out.src = finalUrl + "&retry=1";
+            }
+        }, 15000);
+
+        out.src = finalUrl;
+        debug.style.display = "block";
+        debug.innerText = "分析結果：" + desc;
+        
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
     } finally {
