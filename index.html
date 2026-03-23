@@ -7,10 +7,11 @@
         body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fdfdfd; }
         .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #eee; }
         input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; box-sizing: border-box; }
-        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
-        #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
-        img { max-width: 100%; border-radius: 12px; display: none; margin-top: 20px; border: 1px solid #eee; }
-        #debug { font-size: 11px; color: #999; margin-top: 15px; display: none; text-align: left; background: #f9f9f9; padding: 10px; border-radius: 5px; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; transition: 0.3s; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #status { color: #2563eb; margin: 20px 0; font-weight: bold; min-height: 1.2em; }
+        img { max-width: 100%; border-radius: 12px; display: none; margin-top: 20px; border: 1px solid #eee; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        #debug { font-size: 11px; color: #999; margin-top: 15px; display: none; text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -23,7 +24,7 @@
     <button id="btn" onclick="start()">🚀 立即生成白底照片</button>
     
     <div id="status">準備就緒</div>
-    <img id="out">
+    <img id="out" onload="this.style.display='block';">
     <div id="debug"></div>
 </div>
 
@@ -41,7 +42,7 @@ async function start() {
     btn.disabled = true;
     out.style.display = "none";
     debug.style.display = "none";
-    status.innerText = "⏳ 正在分析材質 (美國中轉站)...";
+    status.innerText = "⏳ 正在辨識材質 (美國中轉站)...";
 
     const b64 = await new Promise(r => {
         const f = new FileReader();
@@ -50,7 +51,7 @@ async function start() {
     });
 
     try {
-        // 第一步：叫 AI 分析呢件珠寶係乜
+        // 第一步：叫 AI 分析呢件珠寶係乜，唔再叫佢俾網址
         const res = await fetch("/api/proxy", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -60,7 +61,7 @@ async function start() {
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Identify this jewelry. Return ONLY a 5-word English description of its appearance (e.g. 'Silver moissanite heart pendant necklace')." },
+                        { type: "text", text: "Identify this jewelry. Return ONLY a short English description of its appearance (e.g. 'Silver moissanite heart pendant'). No other words." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -71,20 +72,21 @@ async function start() {
         
         if (data.choices && data.choices[0].message) {
             const description = data.choices[0].message.content.trim();
-            status.innerText = "🎨 辨識成功，正在繪圖...";
+            status.innerText = "🎨 辨識成功，正在從雲端繪圖...";
             
-            // 第二步：直接用程式砌條生圖 URL，100% 避開 match 錯誤
-            const prompt = encodeURIComponent(`Professional commercial photo of ${description}, centered, pure white background, studio lighting, high resolution, 8k`);
-            const finalUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+            // 第二步：由程式直接砌條生圖 URL，100% 避開 match 錯誤
+            const cleanDescription = description.replace(/[^a-zA-Z0-9 ]/g, '');
+            const prompt = encodeURIComponent(`Professional commercial product photo of ${cleanDescription}, centered, pure white background, studio lighting, high resolution, 8k`);
+            const finalUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random()*10000)}`;
 
             out.src = finalUrl;
-            out.style.display = "block";
-            status.innerText = "🎉 生成成功！圖片載入中...";
+            // 圖片顯示由 onload 觸發
+            status.innerText = "🎉 生成成功！圖片正在載入...";
             
             debug.style.display = "block";
-            debug.innerText = "AI 辨識結果：" + description;
+            debug.innerText = "AI 辨識結果：" + description + "\n生成網址：" + finalUrl;
         } else {
-            throw new Error(data.error ? data.error.message : "AI 冇反應");
+            throw new Error(data.error ? data.error.message : "AI 冇反應，請檢查 API Key");
         }
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
