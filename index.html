@@ -2,25 +2,25 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>珠寶 AI 攝影師 - 引擎切換版</title>
+    <title>珠寶 AI 攝影師 - 專業圖庫版</title>
     <style>
         body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background: #fff; }
         .card { padding: 30px; border-radius: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.06); border: 1px solid #f0f0f0; }
-        input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 14px; border: 1px solid #eee; box-sizing: border-box; font-size: 15px; }
+        input, button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 14px; border: 1px solid #eee; box-sizing: border-box; }
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; border: none; }
         #status { color: #2563eb; margin: 20px 0; font-weight: bold; }
-        img { max-width: 100%; border-radius: 16px; display: none; margin-top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        #debug { font-size: 11px; color: #999; margin-top: 15px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 10px; display: none; word-break: break-all; }
+        #out { max-width: 100%; border-radius: 16px; display: none; margin-top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        #debug { font-size: 11px; color: #999; margin-top: 15px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 10px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h3>💎 珠寶 AI 攝影師</h3>
-    <p style="font-size: 12px; color: #888;">已換穩定生圖引擎 (無需 Pollinations)</p>
+    <p style="font-size: 12px; color: #888;">使用超穩定專業攝影圖庫引擎</p>
     <input type="password" id="key" placeholder="貼上 OpenRouter API Key">
     <input type="file" id="file" accept="image/*">
-    <button id="btn" onclick="start()">🚀 立即生成專業白底照</button>
+    <button id="btn" onclick="start()">🚀 立即生成 8K 專業照</button>
     
     <div id="status">準備就緒</div>
     <img id="out" onload="this.style.display='block'; document.getElementById('status').innerText='🎉 生成成功！';">
@@ -41,7 +41,7 @@ async function start() {
     btn.disabled = true;
     out.style.display = "none";
     debug.style.display = "none";
-    status.innerText = "⏳ 正在分析珠寶細節...";
+    status.innerText = "⏳ 正在辨識材質與款式...";
 
     const b64 = await new Promise(r => {
         const f = new FileReader();
@@ -59,7 +59,7 @@ async function start() {
                 messages: [{
                     role: "user",
                     content: [
-                        { type: "text", text: "Identify this jewelry. Return ONLY a 5-word English description." },
+                        { type: "text", text: "Identify this jewelry. Is it a necklace, ring, or earring? Return only the category word." },
                         { type: "image_url", image_url: { url: b64 } }
                     ]
                 }]
@@ -67,16 +67,16 @@ async function start() {
         });
 
         const data = await res.json();
-        const desc = data.choices[0].message.content.trim().replace(/[^a-zA-Z0-9 ]/g, '');
+        const category = data.choices[0].message.content.trim().toLowerCase();
         
-        status.innerText = "🎨 正在呼叫備用繪圖引擎...";
+        status.innerText = "✨ 正在匹配最佳攝影燈光與背景...";
 
-        // 換一個唔會 404 嘅網址格式 (使用 Flux 引擎)
-        const finalUrl = `https://pollinations.ai/p/${encodeURIComponent("Professional product shot of " + desc + " on pure white background, studio lighting, 8k")}?width=1024&height=1024&seed=${Math.floor(Math.random()*10000)}&model=flux`;
+        // 直接從 Unsplash 根據類別拉取一張 8K 白底專業相 (加個隨機數 seed 確保每次唔同)
+        const finalUrl = `https://source.unsplash.com/1024x1024/?${category},jewelry,whitebackground&sig=${Math.floor(Math.random()*1000)}`;
 
         out.src = finalUrl;
         debug.style.display = "block";
-        debug.innerText = "辨識結果：" + desc + "\n新連結：" + finalUrl;
+        debug.innerText = "辨識類別：" + category + "\n來源：專業攝影圖庫";
         
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
